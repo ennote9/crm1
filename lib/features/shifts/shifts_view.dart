@@ -1661,6 +1661,7 @@ class _ShiftsViewState extends State<ShiftsView> {
     return ValueListenableBuilder<List<FilterCondition>>(
       valueListenable: globalFilters,
       builder: (context, _, child) {
+        if (child != null) {}
         final currentList = filteredEmployees;
 
         int active = employees.where((e) => e['status'] == 'Активен').length;
@@ -1709,8 +1710,8 @@ class _ShiftsViewState extends State<ShiftsView> {
                           return ValueListenableBuilder<bool>(
                             valueListenable: isViewModified,
                             builder: (context, isMod, _) {
-                              bool highlight =
-                                  isMod || viewName != 'Стандартный вид';
+                              final bool highlight =
+                                  false; // фикс: не меняем стиль кнопки после применения настроек
                               return Container(
                                 margin: const EdgeInsets.only(right: 16),
                                 height:
@@ -1784,15 +1785,21 @@ class _ShiftsViewState extends State<ShiftsView> {
 
               LayoutBuilder(
                 builder: (context, constraints) {
-                  return Scrollbar(
-                    controller: _cardsScrollController,
+                  final behavior = ScrollConfiguration.of(
+                    context,
+                  ).copyWith(scrollbars: false);
+                  const double minWidth =
+                      1212; // 6 карточек * (190 + 12 margin)
+                  final double w = constraints.maxWidth < minWidth
+                      ? minWidth
+                      : constraints.maxWidth;
+                  return ScrollConfiguration(
+                    behavior: behavior,
                     child: SingleChildScrollView(
                       controller: _cardsScrollController,
                       scrollDirection: Axis.horizontal,
                       child: SizedBox(
-                        width: constraints.maxWidth < 1180
-                            ? 1180
-                            : constraints.maxWidth,
+                        width: w,
                         child: Row(
                           children: [
                             _buildDashboardCard(
@@ -1857,13 +1864,16 @@ class _ShiftsViewState extends State<ShiftsView> {
                     double w = constraints.maxWidth > minWidth
                         ? constraints.maxWidth
                         : minWidth;
-                    return Scrollbar(
-                      controller: _filtersScrollController,
+                    final behavior = ScrollConfiguration.of(
+                      context,
+                    ).copyWith(scrollbars: false);
+                    return ScrollConfiguration(
+                      behavior: behavior,
                       child: SingleChildScrollView(
                         controller: _filtersScrollController,
                         scrollDirection: Axis.horizontal,
                         child: SizedBox(
-                          width: w - 24,
+                          width: w,
                           child: Row(
                             children: [
                               Expanded(
