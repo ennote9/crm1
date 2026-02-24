@@ -1,0 +1,4881 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/services.dart';
+
+import '../../layout/responsive_wrapper.dart';
+import '../../ui/custom_colors.dart';
+
+class ColumnConfig {
+  String key;
+  String title;
+  bool isVisible;
+  double width;
+
+  ColumnConfig({
+    required this.key,
+    required this.title,
+    this.isVisible = true,
+    this.width = 150,
+  });
+  ColumnConfig clone() =>
+      ColumnConfig(key: key, title: title, isVisible: isVisible, width: width);
+}
+
+class FilterCondition {
+  String field;
+  String operator;
+  String value;
+
+  FilterCondition({
+    this.field = 'name',
+    this.operator = 'Содержит',
+    this.value = '',
+  });
+  FilterCondition clone() =>
+      FilterCondition(field: field, operator: operator, value: value);
+}
+
+class ViewPreset {
+  String name;
+  List<ColumnConfig> columns;
+  List<FilterCondition> filters;
+  final bool isStandard;
+
+  ViewPreset({
+    required this.name,
+    required this.columns,
+    required this.filters,
+    this.isStandard = false,
+  });
+  ViewPreset clone() => ViewPreset(
+    name: name,
+    columns: columns.map((c) => c.clone()).toList(),
+    filters: filters.map((f) => f.clone()).toList(),
+    isStandard: isStandard,
+  );
+}
+
+// Заводские колонки (Разделены Телефон и Тип найма)
+final List<ColumnConfig> defaultColumns = [
+  ColumnConfig(key: 'name', title: 'Сотрудник', width: 240),
+  ColumnConfig(key: 'phone', title: 'Телефон', width: 160),
+  ColumnConfig(key: 'role', title: 'Должность', width: 180),
+  ColumnConfig(key: 'employment', title: 'Тип найма', width: 140),
+  ColumnConfig(key: 'zone', title: 'Текущая зона', width: 160),
+  ColumnConfig(key: 'status', title: 'Статус', width: 160),
+  ColumnConfig(key: 'login', title: 'Логин', isVisible: false, width: 140),
+  ColumnConfig(key: 'email', title: 'Email', isVisible: false, width: 220),
+  ColumnConfig(
+    key: 'telegram',
+    title: 'Telegram',
+    isVisible: false,
+    width: 140,
+  ),
+  ColumnConfig(key: 'iin', title: 'ИИН', isVisible: false, width: 150),
+  ColumnConfig(key: 'contract', title: 'Договор', isVisible: false, width: 130),
+  ColumnConfig(
+    key: 'hireDate',
+    title: 'Дата приема',
+    isVisible: false,
+    width: 130,
+  ),
+  ColumnConfig(
+    key: 'clothes',
+    title: 'Размер одежды',
+    isVisible: false,
+    width: 140,
+  ),
+  ColumnConfig(
+    key: 'shoes',
+    title: 'Размер обуви',
+    isVisible: false,
+    width: 120,
+  ),
+  ColumnConfig(key: 'locker', title: 'Шкафчик', isVisible: false, width: 100),
+  ColumnConfig(key: 'tsdPin', title: 'ПИН ТСД', isVisible: false, width: 100),
+];
+
+// Состояние текущего списка
+final ValueNotifier<List<ColumnConfig>> globalColumns = ValueNotifier(
+  defaultColumns.map((c) => c.clone()).toList(),
+);
+final ValueNotifier<List<FilterCondition>> globalFilters = ValueNotifier([]);
+final ValueNotifier<String> currentViewName = ValueNotifier('Стандартный вид');
+final ValueNotifier<bool> isViewModified = ValueNotifier(false);
+
+// Сохраненные пресеты
+final ValueNotifier<List<ViewPreset>> globalPresets = ValueNotifier([
+  ViewPreset(
+    name: 'Стандартный вид',
+    columns: defaultColumns.map((c) => c.clone()).toList(),
+    filters: [],
+    isStandard: true,
+  ),
+]);
+
+// ============================================================================
+// ВСПОМОГАТЕЛЬНЫЕ ДАННЫЕ И ЦВЕТА
+// ============================================================================
+Color getStatusColor(BuildContext context, String status) {
+  bool isDark = Theme.of(context).brightness == Brightness.dark;
+  if (status == 'Активен') {
+    return isDark ? Colors.greenAccent : Colors.green.shade700;
+  }
+  if (status == 'В отпуске') {
+    return isDark ? Colors.orangeAccent : Colors.orange.shade800;
+  }
+  if (status == 'Больничный') {
+    return isDark ? Colors.redAccent : Colors.red.shade700;
+  }
+  if (status == 'Отсутствует') {
+    return isDark ? Colors.purpleAccent : Colors.purple.shade700;
+  }
+  if (status == 'В архиве') {
+    return Colors.grey;
+  }
+  return isDark ? Colors.white54 : Colors.black54;
+}
+
+final List<String> globalRoles = [
+  'Старший смены',
+  'Комплектовщик',
+  'Водитель погрузчика',
+  'Приемщик',
+];
+final List<String> globalZones = [
+  'Зона А (Сборка)',
+  'Зона Б (Паллеты)',
+  'Пандус 1',
+  'Холодильник',
+  'Все зоны',
+];
+final List<String> globalStatuses = [
+  'Активен',
+  'В отпуске',
+  'Больничный',
+  'Отсутствует',
+  'В архиве',
+];
+final List<String> clothesSizes = [
+  'S (44-46)',
+  'M (46-48)',
+  'L (48-50)',
+  'XL (50-52)',
+  'XXL (52-54)',
+];
+final List<String> shoeSizes = [
+  '35',
+  '36',
+  '37',
+  '38',
+  '39',
+  '40',
+  '41',
+  '42',
+  '43',
+  '44',
+  '45',
+  '46',
+  '47',
+];
+final List<String> globalEmploymentTypes = ['Штат', 'Аутстаффинг', 'ГПХ'];
+final List<String> globalRights = [
+  '1C Предприятие',
+  'ТСД Сканер (Сборка)',
+  'ТСД Сканер (Приемка)',
+  'Редактирование смен',
+  'Допуск в Холодильник',
+  'Вождение погрузчика',
+];
+final List<String> globalInventoryTypes = [
+  'Ноутбук / ПК',
+  'ТСД Сканер',
+  'Рация',
+  'Спецодежда',
+  'Ключи',
+  'Прочее',
+];
+
+String transliterate(String text) {
+  const cyrillic =
+      'АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюя';
+  const latin = [
+    'A',
+    'B',
+    'V',
+    'G',
+    'D',
+    'E',
+    'E',
+    'ZH',
+    'Z',
+    'I',
+    'Y',
+    'K',
+    'L',
+    'M',
+    'N',
+    'O',
+    'P',
+    'R',
+    'S',
+    'T',
+    'U',
+    'F',
+    'H',
+    'TS',
+    'CH',
+    'SH',
+    'SCH',
+    '',
+    'Y',
+    '',
+    'E',
+    'YU',
+    'YA',
+    'a',
+    'b',
+    'v',
+    'g',
+    'd',
+    'e',
+    'e',
+    'zh',
+    'z',
+    'i',
+    'y',
+    'k',
+    'l',
+    'm',
+    'n',
+    'o',
+    'p',
+    'r',
+    's',
+    't',
+    'u',
+    'f',
+    'h',
+    'ts',
+    'ch',
+    'sh',
+    'sch',
+    '',
+    'y',
+    '',
+    'e',
+    'yu',
+    'ya',
+  ];
+  String res = '';
+  for (int i = 0; i < text.length; i++) {
+    int index = cyrillic.indexOf(text[i]);
+    if (index >= 0) {
+      res += latin[index];
+    } else {
+      res += text[i];
+    }
+  }
+  return res;
+}
+
+class PhoneInputFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final text = newValue.text.replaceAll(RegExp(r'\D'), '');
+    String formatted = '';
+    if (text.isNotEmpty) {
+      formatted = '+7 ';
+      if (text.length > 1) {
+        formatted +=
+            '(${text.substring(1, text.length >= 4 ? 4 : text.length)}';
+      }
+      if (text.length >= 4) {
+        formatted +=
+            ') ${text.substring(4, text.length >= 7 ? 7 : text.length)}';
+      }
+      if (text.length >= 7) {
+        formatted +=
+            '-${text.substring(7, text.length >= 9 ? 9 : text.length)}';
+      }
+      if (text.length >= 9) {
+        formatted +=
+            '-${text.substring(9, text.length >= 11 ? 11 : text.length)}';
+      }
+    }
+    return TextEditingValue(
+      text: formatted,
+      selection: TextSelection.collapsed(offset: formatted.length),
+    );
+  }
+}
+
+// ============================================================================
+// АБСОЛЮТНАЯ ЗАЩИТА ОТ OVERFLOW
+// ============================================================================
+
+class AbsenceDialog extends StatefulWidget {
+  const AbsenceDialog({super.key});
+  @override
+  State<AbsenceDialog> createState() => _AbsenceDialogState();
+}
+
+class _AbsenceDialogState extends State<AbsenceDialog> {
+  DateTime? _start;
+  DateTime? _end;
+
+  void _pickDate(bool isStart) async {
+    DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now(),
+      firstDate: DateTime.now().subtract(const Duration(days: 30)),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+      builder: (context, child) => Theme(
+        data: Theme.of(context).copyWith(
+          colorScheme: ColorScheme.dark(
+            primary: context.primary,
+            onPrimary: Colors.white,
+            surface: context.card,
+            onSurface: context.textMain,
+          ),
+        ),
+        child: child!,
+      ),
+    );
+    if (picked != null) {
+      setState(() {
+        if (isStart) {
+          _start = picked;
+          if (_end != null && _end!.isBefore(_start!)) {
+            _end = null;
+          }
+        } else {
+          _end = picked;
+        }
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: context.bg,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      clipBehavior: Clip.antiAlias,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 400),
+        child: DialogScrollWrapper(
+          minWidth: 350,
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Выбор периода',
+                  style: TextStyle(
+                    color: context.textMain,
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildDateBox('Начало', _start, () {
+                        _pickDate(true);
+                      }),
+                    ),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 16),
+                      child: Icon(
+                        Icons.arrow_forward_rounded,
+                        color: Colors.white38,
+                      ),
+                    ),
+                    Expanded(
+                      child: _buildDateBox('Конец', _end, () {
+                        _pickDate(false);
+                      }),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 32),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () {
+                        Navigator.pop(context);
+                      },
+                      child: Text(
+                        'Отмена',
+                        style: TextStyle(color: context.textMuted),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    ElevatedButton(
+                      onPressed: (_start != null && _end != null)
+                          ? () {
+                              String format(DateTime d) =>
+                                  "${d.day.toString().padLeft(2, '0')}.${d.month.toString().padLeft(2, '0')}.${d.year}";
+                              Navigator.pop(
+                                context,
+                                "${format(_start!)} - ${format(_end!)}",
+                              );
+                            }
+                          : null,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: context.primary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 16,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: const Text('Сохранить'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDateBox(String label, DateTime? date, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: context.card,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: context.border),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              style: TextStyle(color: context.textMuted, fontSize: 12),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              date != null
+                  ? "${date.day.toString().padLeft(2, '0')}.${date.month.toString().padLeft(2, '0')}.${date.year}"
+                  : "Выберите",
+              style: TextStyle(
+                color: date != null ? context.textMain : context.textMuted,
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ============================================================================
+// ЕДИНЫЙ ЦЕНТР НАСТРОЕК ВИДА И ФИЛЬТРОВ (ПАТТЕРН ERP)
+// ============================================================================
+class ViewSettingsDialog extends StatefulWidget {
+  const ViewSettingsDialog({super.key});
+  @override
+  State<ViewSettingsDialog> createState() => _ViewSettingsDialogState();
+}
+
+class _ViewSettingsDialogState extends State<ViewSettingsDialog> {
+  late List<ColumnConfig> tempCols;
+  late List<FilterCondition> tempFilters;
+  late String currentPreset;
+  bool isModified = false;
+
+  @override
+  void initState() {
+    super.initState();
+    tempCols = globalColumns.value.map((c) => c.clone()).toList();
+    tempFilters = globalFilters.value.map((f) => f.clone()).toList();
+    currentPreset = currentViewName.value;
+    isModified = isViewModified.value;
+  }
+
+  void _applyPreset(ViewPreset preset) {
+    setState(() {
+      currentPreset = preset.name;
+      tempCols = preset.columns.map((c) => c.clone()).toList();
+      tempFilters = preset.filters.map((f) => f.clone()).toList();
+      isModified = false;
+    });
+  }
+
+  void _markAsModified() {
+    if (!isModified) {
+      setState(() {
+        isModified = true;
+      });
+    }
+  }
+
+  void _deletePreset(String name) {
+    if (name == 'Стандартный вид') return;
+    setState(() {
+      globalPresets.value = List.from(globalPresets.value)
+        ..removeWhere((p) => p.name == name);
+      _applyPreset(globalPresets.value.first);
+    });
+  }
+
+  void _renamePreset(String oldName) {
+    if (oldName == 'Стандартный вид') return;
+    final ctrl = TextEditingController(text: oldName);
+    showDialog(
+      context: context,
+      builder: (c) => AlertDialog(
+        backgroundColor: context.bg,
+        title: Text(
+          'Переименовать пресет',
+          style: TextStyle(color: context.textMain),
+        ),
+        content: TextField(
+          controller: ctrl,
+          style: TextStyle(color: context.textMain),
+          decoration: InputDecoration(
+            filled: true,
+            fillColor: context.card,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(c);
+            },
+            child: Text('Отмена', style: TextStyle(color: context.textMuted)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final newName = ctrl.text.trim();
+              if (newName.isNotEmpty &&
+                  !globalPresets.value.any((p) => p.name == newName)) {
+                final list = List<ViewPreset>.from(globalPresets.value);
+                final idx = list.indexWhere((p) => p.name == oldName);
+                if (idx != -1) {
+                  list[idx].name = newName;
+                  globalPresets.value = list;
+                  setState(() {
+                    currentPreset = newName;
+                  });
+                }
+                Navigator.pop(c);
+              }
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: context.primary),
+            child: const Text(
+              'Сохранить',
+              style: TextStyle(color: Colors.white),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _saveAsNewPreset() {
+    final ctrl = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (c) => AlertDialog(
+        backgroundColor: context.bg,
+        title: Text(
+          'Сохранить пресет',
+          style: TextStyle(
+            color: context.textMain,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        content: TextField(
+          controller: ctrl,
+          style: TextStyle(color: context.textMain),
+          decoration: InputDecoration(
+            filled: true,
+            fillColor: context.card,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
+            hintText: 'Мой новый вид',
+            hintStyle: TextStyle(color: context.textMuted),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(c);
+            },
+            child: Text('Отмена', style: TextStyle(color: context.textMuted)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final name = ctrl.text.trim();
+              if (name.isEmpty) {
+                return;
+              }
+
+              final existingIdx = globalPresets.value.indexWhere(
+                (p) => p.name == name,
+              );
+              if (existingIdx != -1) {
+                if (globalPresets.value[existingIdx].isStandard) {
+                  return;
+                }
+                showDialog(
+                  context: context,
+                  builder: (c2) => AlertDialog(
+                    backgroundColor: context.bg,
+                    title: Text(
+                      'Перезаписать?',
+                      style: TextStyle(color: context.textMain),
+                    ),
+                    content: Text(
+                      'Пресет "$name" уже существует. Заменить его?',
+                      style: TextStyle(color: context.textMuted),
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () {
+                          Navigator.pop(c2);
+                        },
+                        child: Text(
+                          'Отмена',
+                          style: TextStyle(color: context.textMuted),
+                        ),
+                      ),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: context.primary,
+                        ),
+                        onPressed: () {
+                          final newP = ViewPreset(
+                            name: name,
+                            columns: tempCols.map((x) => x.clone()).toList(),
+                            filters: tempFilters.map((x) => x.clone()).toList(),
+                          );
+                          final list = List<ViewPreset>.from(
+                            globalPresets.value,
+                          );
+                          list[existingIdx] = newP;
+                          globalPresets.value = list;
+                          currentViewName.value = name;
+                          isViewModified.value = false;
+                          Navigator.pop(c2);
+                          Navigator.pop(c);
+                          Navigator.pop(context);
+                        },
+                        child: const Text(
+                          'Да',
+                          style: TextStyle(color: Colors.white),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              } else {
+                final newP = ViewPreset(
+                  name: name,
+                  columns: tempCols.map((x) => x.clone()).toList(),
+                  filters: tempFilters.map((x) => x.clone()).toList(),
+                );
+                globalPresets.value = [...globalPresets.value, newP];
+                currentViewName.value = name;
+                isViewModified.value = false;
+                Navigator.pop(c);
+                Navigator.pop(context);
+              }
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: context.primary),
+            child: const Text(
+              'Сохранить',
+              style: TextStyle(color: Colors.white),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final activePresetObj = globalPresets.value.firstWhere(
+      (p) => p.name == currentPreset,
+      orElse: () => globalPresets.value.first,
+    );
+
+    return Dialog(
+      backgroundColor: context.bg,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      clipBehavior: Clip.antiAlias,
+      child: ConstrainedBox(
+        // ИСПРАВЛЕНО: Увеличен размер окна настроек для комфорта
+        constraints: BoxConstraints(
+          maxWidth: 850,
+          maxHeight: MediaQuery.of(context).size.height * 0.9,
+        ),
+        child: DialogScrollWrapper(
+          minWidth: 700,
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: DefaultTabController(
+              length: 2,
+              child: Column(
+                mainAxisSize: MainAxisSize.max,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Настройка представления',
+                        style: TextStyle(
+                          color: context.textMain,
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      IconButton(
+                        icon: Icon(Icons.close, color: context.textMuted),
+                        onPressed: () {
+                          Navigator.pop(context);
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: context.card,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: context.border),
+                    ),
+                    child: Row(
+                      children: [
+                        Text(
+                          'Активный пресет:',
+                          style: TextStyle(
+                            color: context.textMuted,
+                            fontSize: 13,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Container(
+                            height: 48,
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            decoration: BoxDecoration(
+                              color: context.surface,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<String>(
+                                value: currentPreset,
+                                icon: Icon(
+                                  Icons.keyboard_arrow_down,
+                                  color: context.textMuted,
+                                  size: 16,
+                                ),
+                                dropdownColor: context.card,
+                                borderRadius: BorderRadius.circular(12),
+                                style: TextStyle(
+                                  color: isModified
+                                      ? context.orange
+                                      : context.textMain,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                isExpanded: true,
+                                items: globalPresets.value
+                                    .map(
+                                      (e) => DropdownMenuItem(
+                                        value: e.name,
+                                        child: Text(
+                                          e.name +
+                                              (isModified &&
+                                                      e.name == currentPreset
+                                                  ? ' *'
+                                                  : ''),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    )
+                                    .toList(),
+                                onChanged: (v) {
+                                  if (v != null) {
+                                    final preset = globalPresets.value
+                                        .firstWhere((p) => p.name == v);
+                                    _applyPreset(preset);
+                                  }
+                                },
+                              ),
+                            ),
+                          ),
+                        ),
+                        // ИСПРАВЛЕНО: Управление пресетом (Компактные кнопки)
+                        if (!activePresetObj.isStandard && !isModified) ...[
+                          const SizedBox(width: 8),
+                          IconButton(
+                            icon: Icon(
+                              Icons.edit,
+                              color: context.textMuted,
+                              size: 20,
+                            ),
+                            onPressed: () => _renamePreset(currentPreset),
+                            tooltip: 'Переименовать',
+                          ),
+                          IconButton(
+                            icon: const Icon(
+                              Icons.delete_outline,
+                              color: Colors.redAccent,
+                              size: 20,
+                            ),
+                            onPressed: () => _deletePreset(currentPreset),
+                            tooltip: 'Удалить',
+                          ),
+                        ],
+                        const SizedBox(width: 16),
+                        ElevatedButton.icon(
+                          onPressed: isModified ? _saveAsNewPreset : null,
+                          icon: const Icon(Icons.save, size: 16),
+                          label: const Text('Сохранить'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: context.surface,
+                            foregroundColor: context.textMain,
+                            elevation: 0,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  TabBar(
+                    dividerColor: context.border,
+                    indicatorColor: context.primary,
+                    labelColor: context.primary,
+                    unselectedLabelColor: context.textMuted,
+                    tabAlignment: TabAlignment.start,
+                    isScrollable: true,
+                    tabs: const [
+                      Tab(
+                        icon: Icon(Icons.view_column_outlined),
+                        text: 'Структура колонок',
+                      ),
+                      Tab(
+                        icon: Icon(Icons.filter_alt_outlined),
+                        text: 'Условия фильтрации',
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+
+                  // ИСПРАВЛЕНО: Гибкая высота через Expanded вместо жестких 400px (решает проблему сжатия диалога)
+                  Expanded(
+                    child: TabBarView(
+                      children: [
+                        // ТАБ 1: КОЛОНКИ
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Включайте нужные колонки и меняйте их порядок перетаскиванием.',
+                              style: TextStyle(
+                                color: context.textMuted,
+                                fontSize: 13,
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            Expanded(
+                              child: ReorderableListView(
+                                buildDefaultDragHandles: false,
+                                onReorder: (oldIdx, newIdx) {
+                                  _markAsModified();
+                                  setState(() {
+                                    if (newIdx > oldIdx) {
+                                      newIdx -= 1;
+                                    }
+                                    final item = tempCols.removeAt(oldIdx);
+                                    tempCols.insert(newIdx, item);
+                                  });
+                                },
+                                children: tempCols
+                                    .map(
+                                      (c) => Container(
+                                        key: ValueKey(c.key),
+                                        margin: const EdgeInsets.only(
+                                          bottom: 8,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: context.card,
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                          border: Border.all(
+                                            color: context.border,
+                                          ),
+                                        ),
+                                        child: ListTile(
+                                          leading: ReorderableDragStartListener(
+                                            index: tempCols.indexOf(c),
+                                            child: Icon(
+                                              Icons.drag_indicator,
+                                              color: context.textMuted,
+                                              size: 20,
+                                            ),
+                                          ),
+                                          title: Text(
+                                            c.title,
+                                            style: TextStyle(
+                                              color: context.textMain,
+                                              fontSize: 14,
+                                            ),
+                                          ),
+                                          trailing: CupertinoSwitch(
+                                            value: c.isVisible,
+                                            activeTrackColor: context.primary,
+                                            onChanged: (v) {
+                                              _markAsModified();
+                                              setState(() {
+                                                c.isVisible = v;
+                                              });
+                                            },
+                                          ),
+                                        ),
+                                      ),
+                                    )
+                                    .toList(),
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        // ТАБ 2: ФИЛЬТРЫ
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  'Фильтрация записей в таблице. Можно добавить несколько условий.',
+                                  style: TextStyle(
+                                    color: context.textMuted,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                                TextButton.icon(
+                                  onPressed: () {
+                                    _markAsModified();
+                                    setState(() {
+                                      tempFilters.add(FilterCondition());
+                                    });
+                                  },
+                                  icon: const Icon(Icons.add, size: 16),
+                                  label: const Text('Добавить условие'),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+                            if (tempFilters.isEmpty)
+                              Expanded(
+                                child: Center(
+                                  child: Text(
+                                    'Нет активных фильтров',
+                                    style: TextStyle(color: context.textMuted),
+                                  ),
+                                ),
+                              ),
+                            if (tempFilters.isNotEmpty)
+                              Expanded(
+                                child: ListView.builder(
+                                  itemCount: tempFilters.length,
+                                  itemBuilder: (context, idx) {
+                                    final f = tempFilters[idx];
+                                    return Padding(
+                                      padding: const EdgeInsets.only(
+                                        bottom: 12,
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Expanded(
+                                            child: _buildFilterDropdown(
+                                              f.field,
+                                              defaultColumns
+                                                  .map(
+                                                    (c) => DropdownMenuItem(
+                                                      value: c.key,
+                                                      child: Text(c.title),
+                                                    ),
+                                                  )
+                                                  .toList(),
+                                              (v) {
+                                                _markAsModified();
+                                                setState(() {
+                                                  f.field = v!;
+                                                });
+                                              },
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: _buildFilterDropdown(
+                                              f.operator,
+                                              [
+                                                    'Равно',
+                                                    'Не равно',
+                                                    'Содержит',
+                                                    'Начинается с',
+                                                    'В списке',
+                                                  ]
+                                                  .map(
+                                                    (o) => DropdownMenuItem(
+                                                      value: o,
+                                                      child: Text(o),
+                                                    ),
+                                                  )
+                                                  .toList(),
+                                              (v) {
+                                                _markAsModified();
+                                                setState(() {
+                                                  f.operator = v!;
+                                                });
+                                              },
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            flex: 2,
+                                            child: TextFormField(
+                                              key: ValueKey(
+                                                '${f.field}_${f.operator}',
+                                              ),
+                                              initialValue: f.value,
+                                              style: TextStyle(
+                                                color: context.textMain,
+                                                fontSize: 13,
+                                              ),
+                                              decoration: InputDecoration(
+                                                filled: true,
+                                                fillColor: context.card,
+                                                border: OutlineInputBorder(
+                                                  borderRadius:
+                                                      BorderRadius.circular(12),
+                                                  borderSide: BorderSide.none,
+                                                ),
+                                                hintText:
+                                                    f.operator == 'В списке'
+                                                    ? 'Например: В отпуске, Больничный'
+                                                    : 'Значение',
+                                                hintStyle: TextStyle(
+                                                  color: context.textMuted
+                                                      .withValues(alpha: 0.5),
+                                                ),
+                                                contentPadding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 16,
+                                                    ),
+                                              ),
+                                              onChanged: (v) {
+                                                _markAsModified();
+                                                f.value = v;
+                                              },
+                                            ),
+                                          ),
+                                          IconButton(
+                                            icon: const Icon(
+                                              Icons.delete_outline,
+                                              color: Colors.redAccent,
+                                            ),
+                                            onPressed: () {
+                                              _markAsModified();
+                                              setState(() {
+                                                tempFilters.removeAt(idx);
+                                              });
+                                            },
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      TextButton(
+                        onPressed: () {
+                          _applyPreset(activePresetObj);
+                        },
+                        child: const Text(
+                          'Сбросить изменения',
+                          style: TextStyle(color: Colors.redAccent),
+                        ),
+                      ),
+                      Row(
+                        children: [
+                          TextButton(
+                            onPressed: () {
+                              Navigator.pop(context);
+                            },
+                            child: Text(
+                              'Отмена',
+                              style: TextStyle(color: context.textMuted),
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          ElevatedButton(
+                            onPressed: () {
+                              currentViewName.value = currentPreset;
+                              isViewModified.value = isModified;
+                              globalColumns.value = List.from(tempCols);
+                              globalFilters.value = List.from(tempFilters);
+                              Navigator.pop(context);
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: context.primary,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 32,
+                                vertical: 16,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            child: const Text('Применить вид'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFilterDropdown(
+    String val,
+    List<DropdownMenuItem<String>> items,
+    Function(String?) onChanged,
+  ) {
+    return Container(
+      height: 48,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: context.card,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: val,
+          icon: Icon(Icons.keyboard_arrow_down, color: context.textMuted),
+          dropdownColor: context.card,
+          borderRadius: BorderRadius.circular(12),
+          elevation: 6,
+          style: TextStyle(color: context.textMain, fontSize: 13),
+          isExpanded: true,
+          items: items,
+          onChanged: onChanged,
+        ),
+      ),
+    );
+  }
+}
+
+// ============================================================================
+// ЭКРАН СМЕН (ДАТАГРИД СО СКРОЛЛОМ)
+// ============================================================================
+class ShiftsView extends StatefulWidget {
+  const ShiftsView({super.key});
+  @override
+  State<ShiftsView> createState() => _ShiftsViewState();
+}
+
+class _ShiftsViewState extends State<ShiftsView> {
+  String _searchQuery = '';
+  String _filterZone = 'Все зоны';
+  String _filterStatus = 'Все';
+  String _filterRole = 'Все должности';
+  String _filterEmployment = 'Все типы';
+  final TextEditingController _searchCtrl = TextEditingController();
+
+  final ScrollController _tableScrollController = ScrollController();
+  final ScrollController _cardsScrollController = ScrollController();
+  final ScrollController _filtersScrollController = ScrollController();
+
+  final List<Map<String, dynamic>> employees = [
+    {
+      'name': 'Алексей Смирнов',
+      'login': 'smirnov_a',
+      'role': 'Старший смены',
+      'zone': 'Все зоны',
+      'status': 'Активен',
+      'hasAvatar': true,
+      'phone': '+7 (701) 123-45-67',
+      'telegram': 'alex_smirnov',
+      'email': 'smirnov_a@sklad.kz',
+      'hireDate': '12.08.2023',
+      'contract': '№ 45-K',
+      'iin': '900101300000',
+      'clothes': 'L (48-50)',
+      'shoes': '43',
+      'locker': '112',
+      'employment': 'Штат',
+      'tsdPin': '1234',
+      'absence': null,
+      'rights': <String>['1C Предприятие', 'Редактирование смен'],
+      'inventory': <Map<String, dynamic>>[
+        {
+          'name': 'Сканер Honeywell',
+          'type': 'ТСД Сканер',
+          'details': 'Инв. №4402',
+          'condition': 'Новое',
+          'status': 'Выдано',
+          'issueDate': '15.02.2026, 10:30',
+          'purpose': 'Для сборки',
+        },
+      ],
+      'languages': <Map<String, String>>[
+        {
+          'name': 'Английский',
+          'writing': 'Слабо',
+          'speaking': 'Хорошо',
+          'understanding': 'Отлично',
+        },
+      ],
+    },
+    {
+      'name': 'Мария Иванова',
+      'login': 'ivanova_m',
+      'role': 'Комплектовщик',
+      'zone': 'Зона А (Сборка)',
+      'status': 'В отпуске',
+      'hasAvatar': false,
+      'phone': '+7 (702) 234-56-78',
+      'telegram': 'maria_iv',
+      'email': 'ivanova_m@sklad.kz',
+      'hireDate': '05.01.2024',
+      'contract': '№ 89-K',
+      'iin': '950202400000',
+      'clothes': 'S (44-46)',
+      'shoes': '40',
+      'locker': '045',
+      'employment': 'Аутстаффинг',
+      'tsdPin': '8832',
+      'absence': '20.02.2026 - 28.02.2026',
+      'rights': <String>['ТСД Сканер (Сборка)'],
+      'inventory': <Map<String, dynamic>>[],
+      'languages': <Map<String, String>>[],
+    },
+    {
+      'name': 'Тимур Каримов',
+      'login': 'karimov_t',
+      'role': 'Водитель погрузчика',
+      'zone': 'Пандус 1',
+      'status': 'Активен',
+      'hasAvatar': false,
+      'phone': '+7 (777) 111-22-33',
+      'telegram': 'tim_karim',
+      'email': 'karimov_t@sklad.kz',
+      'hireDate': '10.11.2022',
+      'contract': '№ 12-K',
+      'iin': '880505300111',
+      'clothes': 'XL (50-52)',
+      'shoes': '44',
+      'locker': '089',
+      'employment': 'Штат',
+      'tsdPin': '5544',
+      'absence': null,
+      'rights': <String>['Вождение погрузчика'],
+      'inventory': <Map<String, dynamic>>[],
+      'languages': <Map<String, String>>[],
+    },
+    {
+      'name': 'Елена Попова',
+      'login': 'popova_e',
+      'role': 'Приемщик',
+      'zone': 'Пандус 1',
+      'status': 'Больничный',
+      'hasAvatar': true,
+      'phone': '+7 (705) 555-44-33',
+      'telegram': 'elena_p',
+      'email': 'popova_e@sklad.kz',
+      'hireDate': '01.03.2025',
+      'contract': '№ 105-K',
+      'iin': '920808400222',
+      'clothes': 'M (46-48)',
+      'shoes': '38',
+      'locker': '012',
+      'employment': 'Штат',
+      'tsdPin': '1122',
+      'absence': '22.02.2026 - 26.02.2026',
+      'rights': <String>['ТСД Сканер (Приемка)'],
+      'inventory': <Map<String, dynamic>>[],
+      'languages': <Map<String, String>>[],
+    },
+    {
+      'name': 'Денис Волков',
+      'login': 'volkov_d',
+      'role': 'Комплектовщик',
+      'zone': 'Зона Б (Паллеты)',
+      'status': 'Отсутствует',
+      'hasAvatar': false,
+      'phone': '+7 (708) 999-88-77',
+      'telegram': 'denis_v',
+      'email': 'volkov_d@sklad.kz',
+      'hireDate': '15.09.2025',
+      'contract': '№ 150-K',
+      'iin': '980101300333',
+      'clothes': 'L (48-50)',
+      'shoes': '42',
+      'locker': '156',
+      'employment': 'ГПХ',
+      'tsdPin': '9988',
+      'absence': 'Невыход на смену',
+      'rights': <String>['ТСД Сканер (Сборка)'],
+      'inventory': <Map<String, dynamic>>[],
+      'languages': <Map<String, String>>[],
+    },
+    {
+      'name': 'Айдос Нурланов',
+      'login': 'nurlanov_a',
+      'role': 'Комплектовщик',
+      'zone': 'Холодильник',
+      'status': 'Активен',
+      'hasAvatar': false,
+      'phone': '+7 (701) 333-22-11',
+      'telegram': 'aidos_n',
+      'email': 'nurlanov_a@sklad.kz',
+      'hireDate': '20.01.2026',
+      'contract': '№ 201-K',
+      'iin': '010203300444',
+      'clothes': 'M (46-48)',
+      'shoes': '41',
+      'locker': '077',
+      'employment': 'Аутстаффинг',
+      'tsdPin': '3344',
+      'absence': null,
+      'rights': <String>['ТСД Сканер (Сборка)', 'Допуск в Холодильник'],
+      'inventory': <Map<String, dynamic>>[],
+      'languages': <Map<String, String>>[],
+    },
+    {
+      'name': 'Светлана Ким',
+      'login': 'kim_s',
+      'role': 'Старший смены',
+      'zone': 'Все зоны',
+      'status': 'В архиве',
+      'hasAvatar': true,
+      'phone': '+7 (702) 444-55-66',
+      'telegram': 'sveta_k',
+      'email': 'kim_s@sklad.kz',
+      'hireDate': '10.05.2021',
+      'contract': '№ 05-K',
+      'iin': '850606400555',
+      'clothes': 'S (44-46)',
+      'shoes': '37',
+      'locker': '',
+      'employment': 'Штат',
+      'tsdPin': '',
+      'absence': null,
+      'rights': <String>[],
+      'inventory': <Map<String, dynamic>>[],
+      'languages': <Map<String, String>>[],
+    },
+    {
+      'name': 'Игорь Тарасов',
+      'login': 'tarasov_i',
+      'role': 'Водитель погрузчика',
+      'zone': 'Зона Б (Паллеты)',
+      'status': 'Активен',
+      'hasAvatar': false,
+      'phone': '+7 (777) 666-77-88',
+      'telegram': 'igor_t',
+      'email': 'tarasov_i@sklad.kz',
+      'hireDate': '05.12.2024',
+      'contract': '№ 99-K',
+      'iin': '940303300666',
+      'clothes': 'XXL (52-54)',
+      'shoes': '45',
+      'locker': '190',
+      'employment': 'Штат',
+      'tsdPin': '7766',
+      'absence': null,
+      'rights': <String>['Вождение погрузчика'],
+      'inventory': <Map<String, dynamic>>[],
+      'languages': <Map<String, String>>[],
+    },
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _searchCtrl.text = _searchQuery;
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    _tableScrollController.dispose();
+    _cardsScrollController.dispose();
+    _filtersScrollController.dispose();
+    super.dispose();
+  }
+
+  List<Map<String, dynamic>> get filteredEmployees {
+    return employees.where((emp) {
+      if (_searchQuery.isNotEmpty) {
+        final q = _searchQuery.toLowerCase();
+        if (!emp['name'].toString().toLowerCase().contains(q) &&
+            !emp['phone'].toString().contains(q)) {
+          return false;
+        }
+      }
+      if (_filterZone != 'Все зоны' && emp['zone'] != _filterZone) {
+        return false;
+      }
+      if (_filterStatus != 'Все' && emp['status'] != _filterStatus) {
+        return false;
+      }
+      if (_filterRole != 'Все должности' && emp['role'] != _filterRole) {
+        return false;
+      }
+      if (_filterEmployment != 'Все типы' &&
+          emp['employment'] != _filterEmployment) {
+        return false;
+      }
+
+      // ЛОГИКА ФИЛЬТРАЦИИ AXELOT
+      for (var f in globalFilters.value) {
+        if (f.value.isEmpty) {
+          continue;
+        }
+        var fieldVal = emp[f.field]?.toString().toLowerCase() ?? '';
+        var searchVal = f.value.toLowerCase();
+
+        if (f.operator == 'Равно' && fieldVal != searchVal) {
+          return false;
+        }
+        if (f.operator == 'Не равно' && fieldVal == searchVal) {
+          return false;
+        }
+        if (f.operator == 'Содержит' && !fieldVal.contains(searchVal)) {
+          return false;
+        }
+        if (f.operator == 'Начинается с' && !fieldVal.startsWith(searchVal)) {
+          return false;
+        }
+        if (f.operator == 'В списке') {
+          final listValues = searchVal.split(',').map((e) => e.trim()).toList();
+          if (!listValues.contains(fieldVal)) {
+            return false;
+          }
+        }
+      }
+      return true;
+    }).toList();
+  }
+
+  void _clearFilters() {
+    setState(() {
+      _searchQuery = '';
+      _searchCtrl.clear();
+      _filterZone = 'Все зоны';
+      _filterStatus = 'Все';
+      _filterRole = 'Все должности';
+      _filterEmployment = 'Все типы';
+    });
+  }
+
+  void _showAddEmployeeModal() async {
+    final newEmployee = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (context) => const EmployeeFormDialog(),
+    );
+    if (!mounted) return;
+    if (newEmployee != null) {
+      setState(() {
+        employees.insert(0, newEmployee);
+      });
+    }
+  }
+
+  void _showEditEmployeeModal(
+    int index,
+    Map<String, dynamic> emp, {
+    bool reopenProfile = false,
+  }) async {
+    final updatedEmployee = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (context) => EmployeeFormDialog(employeeToEdit: emp),
+    );
+    if (!mounted) return;
+    if (updatedEmployee != null) {
+      setState(() {
+        employees[index] = updatedEmployee;
+      });
+      if (reopenProfile) {
+        _showEmployeeProfile(index, employees[index]);
+      }
+    }
+  }
+
+  void _showEmployeeProfile(int index, Map<String, dynamic> emp) {
+    showDialog(
+      context: context,
+      builder: (context) => EmployeeProfileDialog(
+        employee: emp,
+        onEditTap: () {
+          Navigator.pop(context);
+          _showEditEmployeeModal(index, employees[index], reopenProfile: true);
+        },
+        onInventoryUpdated: () {
+          setState(() {});
+        },
+      ),
+    );
+  }
+
+  void _archiveEmployee(int index) {
+    setState(() {
+      employees[index]['status'] = 'В архиве';
+    });
+  }
+
+  Widget _buildDashboardCard(
+    String title,
+    String value,
+    Color color,
+    IconData icon, [
+    String? sub,
+  ]) {
+    return Container(
+      width: 190,
+      height: 100,
+      margin: const EdgeInsets.only(right: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: context.card,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: context.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    color: context.textMuted,
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              Icon(icon, size: 18, color: color),
+            ],
+          ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Flexible(
+                child: Text(
+                  value,
+                  style: TextStyle(
+                    color: context.textMain,
+                    fontSize: 26,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (sub != null)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    sub,
+                    style: TextStyle(
+                      color: color,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<List<FilterCondition>>(
+      valueListenable: globalFilters,
+      builder: (context, _, child) {
+        final currentList = filteredEmployees;
+
+        int active = employees.where((e) => e['status'] == 'Активен').length;
+        int vac = employees.where((e) => e['status'] == 'В отпуске').length;
+        int sick = employees.where((e) => e['status'] == 'Больничный').length;
+        int abs = employees.where((e) => e['status'] == 'Отсутствует').length;
+
+        return Container(
+          padding: const EdgeInsets.all(32.0),
+          color: context.bg,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: context.primary.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(
+                          Icons.groups_outlined,
+                          color: context.primary,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Text(
+                        'Команда компании',
+                        style: TextStyle(
+                          fontSize: 32,
+                          fontWeight: FontWeight.bold,
+                          color: context.textMain,
+                        ),
+                      ),
+                    ],
+                  ),
+                  Row(
+                    children: [
+                      ValueListenableBuilder<String>(
+                        valueListenable: currentViewName,
+                        builder: (context, viewName, _) {
+                          return ValueListenableBuilder<bool>(
+                            valueListenable: isViewModified,
+                            builder: (context, isMod, _) {
+                              bool highlight =
+                                  isMod || viewName != 'Стандартный вид';
+                              return Container(
+                                margin: const EdgeInsets.only(right: 16),
+                                height:
+                                    48, // ИСПРАВЛЕНО: Кнопка имеет такую же высоту, как "Добавить"
+                                child: OutlinedButton.icon(
+                                  icon: Icon(
+                                    Icons.tune,
+                                    size: 16,
+                                    color: highlight
+                                        ? context.primary
+                                        : context.textMain,
+                                  ),
+                                  label: Text(
+                                    viewName + (isMod ? '*' : ''),
+                                    style: TextStyle(
+                                      color: highlight
+                                          ? context.primary
+                                          : context.textMain,
+                                    ),
+                                  ),
+                                  onPressed: () =>
+                                      showDialog(
+                                        context: context,
+                                        builder: (c) =>
+                                            const ViewSettingsDialog(),
+                                      ).then((_) {
+                                        if (mounted) {
+                                          setState(() {});
+                                        }
+                                      }),
+                                  style: OutlinedButton.styleFrom(
+                                    side: BorderSide(
+                                      color: highlight
+                                          ? context.primary
+                                          : context.border,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                          );
+                        },
+                      ),
+                      SizedBox(
+                        height: 48,
+                        child: ElevatedButton.icon(
+                          onPressed: _showAddEmployeeModal,
+                          icon: const Icon(Icons.add),
+                          label: const Text('Добавить'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: context.primary,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 24),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  return Scrollbar(
+                    controller: _cardsScrollController,
+                    child: SingleChildScrollView(
+                      controller: _cardsScrollController,
+                      scrollDirection: Axis.horizontal,
+                      child: SizedBox(
+                        width: constraints.maxWidth < 1180
+                            ? 1180
+                            : constraints.maxWidth,
+                        child: Row(
+                          children: [
+                            _buildDashboardCard(
+                              'Всего в штате',
+                              '${employees.length}',
+                              Colors.blueAccent,
+                              Icons.groups_outlined,
+                              '+2 за месяц',
+                            ),
+                            _buildDashboardCard(
+                              'Активны на смене',
+                              '$active',
+                              Colors.greenAccent,
+                              Icons.check_circle_outline,
+                              '85% от цели',
+                            ),
+                            _buildDashboardCard(
+                              'В отпуске',
+                              '$vac',
+                              Colors.orangeAccent,
+                              Icons.beach_access_outlined,
+                            ),
+                            _buildDashboardCard(
+                              'Больничный',
+                              '$sick',
+                              Colors.redAccent,
+                              Icons.medical_services_outlined,
+                            ),
+                            _buildDashboardCard(
+                              'Отсутствуют',
+                              '$abs',
+                              Colors.purpleAccent,
+                              Icons.person_off_outlined,
+                            ),
+                            _buildDashboardCard(
+                              'Эффективность',
+                              '92%',
+                              Colors.pinkAccent,
+                              Icons.trending_up,
+                              'Высокая',
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 24),
+
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: context.card,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: context.border),
+                ),
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    // ИСПРАВЛЕНО: Полоса фильтров тянется на всю длину
+                    double minWidth = 1140;
+                    double w = constraints.maxWidth > minWidth
+                        ? constraints.maxWidth
+                        : minWidth;
+                    return Scrollbar(
+                      controller: _filtersScrollController,
+                      child: SingleChildScrollView(
+                        controller: _filtersScrollController,
+                        scrollDirection: Axis.horizontal,
+                        child: SizedBox(
+                          width: w - 24,
+                          child: Row(
+                            children: [
+                              Expanded(
+                                flex: 3,
+                                child: TextField(
+                                  controller: _searchCtrl,
+                                  onChanged: (val) {
+                                    setState(() {
+                                      _searchQuery = val;
+                                    });
+                                  },
+                                  style: TextStyle(
+                                    color: context.textMain,
+                                    fontSize: 13,
+                                  ),
+                                  decoration: InputDecoration(
+                                    hintText: 'Поиск (ФИО, телефон)',
+                                    hintStyle: TextStyle(
+                                      color: context.textMuted,
+                                      fontSize: 13,
+                                    ),
+                                    prefixIcon: Icon(
+                                      Icons.search,
+                                      color: context.textMuted,
+                                      size: 18,
+                                    ),
+                                    filled: true,
+                                    fillColor: context.bg,
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(10),
+                                      borderSide: BorderSide.none,
+                                    ),
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      vertical: 0,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                flex: 2,
+                                child: _buildCompactFilter(
+                                  _filterZone,
+                                  [
+                                    'Все зоны',
+                                    ...globalZones.where(
+                                      (z) => z != 'Все зоны',
+                                    ),
+                                  ],
+                                  (v) {
+                                    setState(() {
+                                      _filterZone = v!;
+                                    });
+                                  },
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                flex: 2,
+                                child: _buildCompactFilter(
+                                  _filterRole,
+                                  ['Все должности', ...globalRoles],
+                                  (v) {
+                                    setState(() {
+                                      _filterRole = v!;
+                                    });
+                                  },
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                flex: 2,
+                                child: _buildCompactFilter(
+                                  _filterEmployment,
+                                  ['Все типы', ...globalEmploymentTypes],
+                                  (v) {
+                                    setState(() {
+                                      _filterEmployment = v!;
+                                    });
+                                  },
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                flex: 2,
+                                child: _buildCompactFilter(
+                                  _filterStatus,
+                                  ['Все', ...globalStatuses],
+                                  (v) {
+                                    setState(() {
+                                      _filterStatus = v!;
+                                    });
+                                  },
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              IconButton(
+                                onPressed: _clearFilters,
+                                icon: Icon(
+                                  Icons.refresh,
+                                  color: context.textMuted,
+                                  size: 20,
+                                ),
+                                tooltip: 'Сбросить фильтры',
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              Expanded(
+                child: ValueListenableBuilder<List<ColumnConfig>>(
+                  valueListenable: globalColumns,
+                  builder: (context, cols, _) {
+                    final visibleCols = cols.where((c) => c.isVisible).toList();
+
+                    return LayoutBuilder(
+                      builder: (context, constraints) {
+                        double totalWidth =
+                            visibleCols.fold(
+                              0.0,
+                              (sum, col) => sum + col.width,
+                            ) +
+                            120;
+                        double tableWidth = totalWidth > constraints.maxWidth
+                            ? totalWidth
+                            : constraints.maxWidth;
+
+                        return Scrollbar(
+                          controller: _tableScrollController,
+                          thumbVisibility: true,
+                          child: SingleChildScrollView(
+                            controller: _tableScrollController,
+                            scrollDirection: Axis.horizontal,
+                            child: ConstrainedBox(
+                              constraints: BoxConstraints(
+                                minWidth: constraints.maxWidth,
+                              ),
+                              child: SizedBox(
+                                width: tableWidth,
+                                child: Column(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 24,
+                                        vertical: 16,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: context.card,
+                                        borderRadius: const BorderRadius.only(
+                                          topLeft: Radius.circular(16),
+                                          topRight: Radius.circular(16),
+                                        ),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          ...visibleCols.map(
+                                            (c) => SizedBox(
+                                              width: c.width,
+                                              child: Text(
+                                                c.title.toUpperCase(),
+                                                style: TextStyle(
+                                                  color: context.textMuted,
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 12,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                          const Spacer(),
+                                          const SizedBox(width: 32),
+                                        ],
+                                      ),
+                                    ),
+                                    Expanded(
+                                      child: Container(
+                                        decoration: BoxDecoration(
+                                          color: context.surface,
+                                          borderRadius: const BorderRadius.only(
+                                            bottomLeft: Radius.circular(16),
+                                            bottomRight: Radius.circular(16),
+                                          ),
+                                        ),
+                                        child: ListView.separated(
+                                          itemCount: currentList.length,
+                                          separatorBuilder: (context, index) =>
+                                              Divider(
+                                                color: context.border,
+                                                height: 1,
+                                              ),
+                                          itemBuilder: (context, index) {
+                                            final emp = currentList[index];
+                                            final originalIndex = employees
+                                                .indexOf(emp);
+
+                                            return InkWell(
+                                              onTap: () {
+                                                _showEmployeeProfile(
+                                                  originalIndex,
+                                                  emp,
+                                                );
+                                              },
+                                              hoverColor: context.hover,
+                                              child: Padding(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 24,
+                                                      vertical: 16,
+                                                    ),
+                                                child: Row(
+                                                  children: [
+                                                    ...visibleCols.map(
+                                                      (c) => SizedBox(
+                                                        width: c.width,
+                                                        child: _buildCell(
+                                                          c,
+                                                          emp,
+                                                          originalIndex,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    const Spacer(),
+                                                    PopupMenuButton<String>(
+                                                      icon: Icon(
+                                                        Icons.more_vert,
+                                                        color:
+                                                            context.textMuted,
+                                                      ),
+                                                      color: context.hover,
+                                                      shape: RoundedRectangleBorder(
+                                                        borderRadius:
+                                                            BorderRadius.circular(
+                                                              12,
+                                                            ),
+                                                      ),
+                                                      onSelected: (value) {
+                                                        if (value ==
+                                                            'profile') {
+                                                          _showEmployeeProfile(
+                                                            originalIndex,
+                                                            emp,
+                                                          );
+                                                        }
+                                                        if (value == 'edit') {
+                                                          _showEditEmployeeModal(
+                                                            originalIndex,
+                                                            emp,
+                                                          );
+                                                        }
+                                                        if (value ==
+                                                            'archive') {
+                                                          _archiveEmployee(
+                                                            originalIndex,
+                                                          );
+                                                        }
+                                                      },
+                                                      itemBuilder: (context) => [
+                                                        PopupMenuItem(
+                                                          value: 'profile',
+                                                          child: Row(
+                                                            children: [
+                                                              Icon(
+                                                                Icons.person,
+                                                                color: context
+                                                                    .textMain,
+                                                                size: 20,
+                                                              ),
+                                                              const SizedBox(
+                                                                width: 12,
+                                                              ),
+                                                              Text(
+                                                                'Профиль',
+                                                                style: TextStyle(
+                                                                  color: context
+                                                                      .textMain,
+                                                                ),
+                                                              ),
+                                                            ],
+                                                          ),
+                                                        ),
+                                                        PopupMenuItem(
+                                                          value: 'edit',
+                                                          child: Row(
+                                                            children: [
+                                                              Icon(
+                                                                Icons.edit,
+                                                                color: context
+                                                                    .textMain,
+                                                                size: 20,
+                                                              ),
+                                                              const SizedBox(
+                                                                width: 12,
+                                                              ),
+                                                              Text(
+                                                                'Редактировать',
+                                                                style: TextStyle(
+                                                                  color: context
+                                                                      .textMain,
+                                                                ),
+                                                              ),
+                                                            ],
+                                                          ),
+                                                        ),
+                                                        const PopupMenuItem(
+                                                          value: 'archive',
+                                                          child: Row(
+                                                            children: [
+                                                              Icon(
+                                                                Icons.archive,
+                                                                color: Colors
+                                                                    .redAccent,
+                                                                size: 20,
+                                                              ),
+                                                              SizedBox(
+                                                                width: 12,
+                                                              ),
+                                                              Text(
+                                                                'В архив',
+                                                                style: TextStyle(
+                                                                  color: Colors
+                                                                      .redAccent,
+                                                                ),
+                                                              ),
+                                                            ],
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildCell(
+    ColumnConfig c,
+    Map<String, dynamic> emp,
+    int originalIndex,
+  ) {
+    final isArchived = emp['status'] == 'В архиве';
+
+    if (c.key == 'name') {
+      return Row(
+        children: [
+          CircleAvatar(
+            backgroundColor: context.border,
+            child: emp['hasAvatar'] == true
+                ? const Icon(Icons.person, color: Colors.white70)
+                : Text(
+                    emp['name'][0],
+                    style: TextStyle(
+                      color: context.textMain,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Text(
+              emp['name'],
+              style: TextStyle(
+                color: isArchived ? context.textMuted : context.textMain,
+                fontSize: 15,
+                fontWeight: FontWeight.bold,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      );
+    }
+    // ИСПРАВЛЕНО: Телефон вынесен в отдельную колонку
+    else if (c.key == 'phone') {
+      return Align(
+        alignment: Alignment.centerLeft,
+        child: Text(
+          emp['phone'] ?? 'Нет',
+          style: TextStyle(color: context.textMuted, fontSize: 14),
+          overflow: TextOverflow.ellipsis,
+        ),
+      );
+    }
+    // ИСПРАВЛЕНО: Тип найма вынесен в отдельную колонку
+    else if (c.key == 'employment') {
+      return Align(
+        alignment: Alignment.centerLeft,
+        child: Text(
+          emp['employment'] ?? 'Не указан',
+          style: TextStyle(color: context.textMuted, fontSize: 14),
+          overflow: TextOverflow.ellipsis,
+        ),
+      );
+    } else if (c.key == 'role') {
+      return Align(
+        alignment: Alignment.centerLeft,
+        child: Text(
+          emp['role'],
+          style: TextStyle(
+            color: isArchived ? context.textMuted : context.textMain,
+          ),
+          overflow: TextOverflow.ellipsis,
+        ),
+      );
+    } else if (c.key == 'zone') {
+      if (isArchived) {
+        return Text(
+          emp['zone'],
+          style: TextStyle(color: context.textMuted),
+          overflow: TextOverflow.ellipsis,
+        );
+      } else {
+        return Align(
+          alignment: Alignment.centerLeft,
+          child: Container(
+            padding: const EdgeInsets.only(right: 8),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: emp['zone'],
+                icon: Icon(
+                  Icons.keyboard_arrow_down,
+                  color: context.textMuted,
+                  size: 16,
+                ),
+                style: TextStyle(color: context.textMain, fontSize: 13),
+                dropdownColor: context.card,
+                borderRadius: BorderRadius.circular(12),
+                elevation: 6,
+                isDense: true,
+                onChanged: (newZone) {
+                  setState(() {
+                    employees[originalIndex]['zone'] = newZone!;
+                  });
+                },
+                items: globalZones
+                    .map(
+                      (z) => DropdownMenuItem(
+                        value: z,
+                        child: Text(z, overflow: TextOverflow.ellipsis),
+                      ),
+                    )
+                    .toList(),
+              ),
+            ),
+          ),
+        );
+      }
+    } else if (c.key == 'status') {
+      final statusColor = getStatusColor(context, emp['status']);
+      return Align(
+        alignment: Alignment.centerLeft,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          decoration: BoxDecoration(
+            color: statusColor.withValues(alpha: 0.15),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: emp['status'],
+              icon: Icon(
+                Icons.keyboard_arrow_down,
+                color: statusColor,
+                size: 16,
+              ),
+              style: TextStyle(
+                color: statusColor,
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+              ),
+              dropdownColor: context.card,
+              borderRadius: BorderRadius.circular(12),
+              elevation: 6,
+              isDense: true,
+              onChanged: (newStatus) async {
+                if (newStatus == 'В отпуске' ||
+                    newStatus == 'Больничный' ||
+                    newStatus == 'Отсутствует') {
+                  final period = await showDialog<String>(
+                    context: context,
+                    builder: (c) => const AbsenceDialog(),
+                  );
+                  if (period != null) {
+                    setState(() {
+                      employees[originalIndex]['status'] = newStatus!;
+                      employees[originalIndex]['absence'] = period;
+                    });
+                  }
+                } else {
+                  setState(() {
+                    employees[originalIndex]['status'] = newStatus!;
+                    employees[originalIndex]['absence'] = null;
+                  });
+                }
+              },
+              items: globalStatuses
+                  .map(
+                    (s) => DropdownMenuItem(
+                      value: s,
+                      child: Text(
+                        s,
+                        style: TextStyle(color: getStatusColor(context, s)),
+                      ),
+                    ),
+                  )
+                  .toList(),
+            ),
+          ),
+        ),
+      );
+    }
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Text(
+        emp[c.key]?.toString() ?? '-',
+        style: TextStyle(
+          color: isArchived ? context.textMuted : context.textMain,
+          fontSize: 13,
+        ),
+        overflow: TextOverflow.ellipsis,
+      ),
+    );
+  }
+
+  Widget _buildCompactFilter(
+    String value,
+    List<String> items,
+    Function(String?) onChanged,
+  ) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      decoration: BoxDecoration(
+        color: context.bg,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: value,
+          isExpanded: true,
+          icon: Icon(
+            Icons.keyboard_arrow_down,
+            color: context.textMuted,
+            size: 18,
+          ),
+          dropdownColor: context.card,
+          borderRadius: BorderRadius.circular(12),
+          elevation: 6,
+          style: TextStyle(color: context.textMain, fontSize: 12),
+          items: items
+              .map(
+                (e) => DropdownMenuItem(
+                  value: e,
+                  child: Text(e, overflow: TextOverflow.ellipsis),
+                ),
+              )
+              .toList(),
+          onChanged: onChanged,
+        ),
+      ),
+    );
+  }
+}
+
+class EmployeeFormDialog extends StatefulWidget {
+  final Map<String, dynamic>? employeeToEdit;
+  const EmployeeFormDialog({super.key, this.employeeToEdit});
+
+  @override
+  State<EmployeeFormDialog> createState() => _EmployeeFormDialogState();
+}
+
+class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
+  final _formKey = GlobalKey<FormState>();
+
+  late TextEditingController _nameCtrl,
+      _loginCtrl,
+      _phoneCtrl,
+      _tgCtrl,
+      _emailCtrl,
+      _hireDateCtrl,
+      _contractCtrl,
+      _iinCtrl,
+      _lockerCtrl,
+      _tsdPinCtrl;
+  late String _role, _zone, _status, _clothes, _shoes, _employment;
+  late List<String> _selectedRights;
+  late List<Map<String, String>> _languages;
+  String? _absencePeriod;
+  bool _hasAvatar = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final e = widget.employeeToEdit;
+    _nameCtrl = TextEditingController(text: e?['name'] ?? '');
+    _loginCtrl = TextEditingController(text: e?['login'] ?? '');
+    _phoneCtrl = TextEditingController(text: e?['phone'] ?? '');
+    _tgCtrl = TextEditingController(text: e?['telegram'] ?? '');
+    _emailCtrl = TextEditingController(text: e?['email'] ?? '');
+    _hireDateCtrl = TextEditingController(text: e?['hireDate'] ?? '');
+    _contractCtrl = TextEditingController(text: e?['contract'] ?? '');
+    _iinCtrl = TextEditingController(text: e?['iin'] ?? '');
+    _lockerCtrl = TextEditingController(text: e?['locker'] ?? '');
+    _tsdPinCtrl = TextEditingController(text: e?['tsdPin'] ?? '');
+    _absencePeriod = e?['absence'];
+    _hasAvatar = e?['hasAvatar'] ?? false;
+
+    _selectedRights = List<String>.from(e?['rights'] ?? []);
+    _languages = List<Map<String, String>>.from(e?['languages'] ?? []);
+
+    _role = e?['role'] ?? globalRoles[0];
+    _zone = e?['zone'] ?? globalZones[0];
+    _status = e?['status'] ?? globalStatuses[0];
+    if (!globalStatuses.contains(_status)) {
+      _status = globalStatuses[0];
+    }
+
+    _clothes = e?['clothes'] ?? clothesSizes[2];
+    _shoes = e?['shoes'] ?? shoeSizes[5];
+    _employment = e?['employment'] ?? globalEmploymentTypes[0];
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _loginCtrl.dispose();
+    _phoneCtrl.dispose();
+    _tgCtrl.dispose();
+    _emailCtrl.dispose();
+    _hireDateCtrl.dispose();
+    _contractCtrl.dispose();
+    _iinCtrl.dispose();
+    _lockerCtrl.dispose();
+    _tsdPinCtrl.dispose();
+    super.dispose();
+  }
+
+  void _onNameChanged(String name) {
+    if (widget.employeeToEdit != null) {
+      return;
+    }
+    String latin = transliterate(name.trim());
+    List<String> parts = latin.split(RegExp(r'\s+'));
+    String login = '';
+    if (parts.isNotEmpty && parts[0].isNotEmpty) {
+      login = parts[0].toLowerCase();
+      if (parts.length > 1 && parts[1].isNotEmpty) {
+        login += '_${parts[1][0].toLowerCase()}';
+      }
+    }
+    _loginCtrl.value = TextEditingValue(
+      text: login,
+      selection: TextSelection.collapsed(offset: login.length),
+    );
+    final email = login.isNotEmpty ? '$login@sklad.kz' : '';
+    _emailCtrl.value = TextEditingValue(
+      text: email,
+      selection: TextSelection.collapsed(offset: email.length),
+    );
+  }
+
+  Future<void> _pickAbsenceDateRange() async {
+    final period = await showDialog<String>(
+      context: context,
+      builder: (c) => const AbsenceDialog(),
+    );
+    if (period != null) {
+      setState(() {
+        _absencePeriod = period;
+      });
+    }
+  }
+
+  void _pickDate() async {
+    DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now(),
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+      builder: (context, child) => Theme(
+        data: Theme.of(context).copyWith(
+          colorScheme: ColorScheme.dark(
+            primary: context.primary,
+            onPrimary: Colors.white,
+            surface: context.card,
+            onSurface: context.textMain,
+          ),
+        ),
+        child: child!,
+      ),
+    );
+    if (picked != null) {
+      _hireDateCtrl.text =
+          "${picked.day.toString().padLeft(2, '0')}.${picked.month.toString().padLeft(2, '0')}.${picked.year}";
+    }
+  }
+
+  void _addLanguage() async {
+    final result = await showDialog<Map<String, String>>(
+      context: context,
+      builder: (context) {
+        String lang = 'Английский';
+        String write = 'Хорошо';
+        String speak = 'Хорошо';
+        String understand = 'Хорошо';
+        final levels = ['Слабо', 'Хорошо', 'Отлично', 'Родной'];
+
+        return StatefulBuilder(
+          builder: (context, setStateSB) {
+            return AlertDialog(
+              backgroundColor: context.bg,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              title: Text(
+                'Добавить язык',
+                style: TextStyle(
+                  color: context.textMain,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      color: context.card,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: lang,
+                        dropdownColor: context.card,
+                        borderRadius: BorderRadius.circular(12),
+                        elevation: 6,
+                        style: TextStyle(color: context.textMain),
+                        icon: Icon(
+                          Icons.keyboard_arrow_down,
+                          color: context.textMuted,
+                        ),
+                        items:
+                            [
+                                  'Английский',
+                                  'Казахский',
+                                  'Русский',
+                                  'Китайский',
+                                  'Узбекский',
+                                ]
+                                .map(
+                                  (c) => DropdownMenuItem(
+                                    value: c,
+                                    child: Text(c),
+                                  ),
+                                )
+                                .toList(),
+                        onChanged: (v) {
+                          setStateSB(() {
+                            lang = v!;
+                          });
+                        },
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      color: context.card,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: write,
+                        dropdownColor: context.card,
+                        borderRadius: BorderRadius.circular(12),
+                        elevation: 6,
+                        style: TextStyle(color: context.textMain),
+                        icon: Icon(
+                          Icons.keyboard_arrow_down,
+                          color: context.textMuted,
+                        ),
+                        items: levels
+                            .map(
+                              (c) => DropdownMenuItem(value: c, child: Text(c)),
+                            )
+                            .toList(),
+                        onChanged: (v) {
+                          setStateSB(() {
+                            write = v!;
+                          });
+                        },
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      color: context.card,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: speak,
+                        dropdownColor: context.card,
+                        borderRadius: BorderRadius.circular(12),
+                        elevation: 6,
+                        style: TextStyle(color: context.textMain),
+                        icon: Icon(
+                          Icons.keyboard_arrow_down,
+                          color: context.textMuted,
+                        ),
+                        items: levels
+                            .map(
+                              (c) => DropdownMenuItem(value: c, child: Text(c)),
+                            )
+                            .toList(),
+                        onChanged: (v) {
+                          setStateSB(() {
+                            speak = v!;
+                          });
+                        },
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      color: context.card,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: understand,
+                        dropdownColor: context.card,
+                        borderRadius: BorderRadius.circular(12),
+                        elevation: 6,
+                        style: TextStyle(color: context.textMain),
+                        icon: Icon(
+                          Icons.keyboard_arrow_down,
+                          color: context.textMuted,
+                        ),
+                        items: levels
+                            .map(
+                              (c) => DropdownMenuItem(value: c, child: Text(c)),
+                            )
+                            .toList(),
+                        onChanged: (v) {
+                          setStateSB(() {
+                            understand = v!;
+                          });
+                        },
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                  },
+                  child: Text(
+                    'Отмена',
+                    style: TextStyle(color: context.textMuted),
+                  ),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(context, {
+                      'name': lang,
+                      'writing': write,
+                      'speaking': speak,
+                      'understanding': understand,
+                    });
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: context.primary,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: const Text(
+                    'Добавить',
+                    style: TextStyle(color: Colors.white),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (result != null) {
+      setState(() {
+        _languages.add(result);
+      });
+    }
+  }
+
+  Widget _buildField(
+    String label,
+    TextEditingController ctrl, {
+    bool isRequired = false,
+    String hint = '',
+    bool readOnly = false,
+    VoidCallback? onTap,
+    List<TextInputFormatter>? formatters,
+    String? prefix,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: TextStyle(color: context.textMuted, fontSize: 12)),
+          const SizedBox(height: 8),
+          TextFormField(
+            controller: ctrl,
+            readOnly: readOnly,
+            onTap: onTap,
+            inputFormatters: formatters,
+            style: TextStyle(
+              color: readOnly ? context.textMuted : context.textMain,
+            ),
+            onChanged: ctrl == _nameCtrl ? _onNameChanged : null,
+            decoration: InputDecoration(
+              filled: true,
+              fillColor: context.card,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
+              hintText: hint,
+              hintStyle: TextStyle(
+                color: context.textMuted.withValues(alpha: 0.3),
+              ),
+              prefixText: prefix,
+              prefixStyle: TextStyle(color: context.textMain, fontSize: 15),
+            ),
+            validator: isRequired
+                ? (v) {
+                    if (v!.trim().isEmpty) return 'Обязательное поле';
+                    return null;
+                  }
+                : null,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDropdown(
+    String label,
+    String val,
+    List<String> items,
+    Function(String?) onChanged,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: TextStyle(color: context.textMuted, fontSize: 12)),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            decoration: BoxDecoration(
+              color: context.card,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: val,
+                icon: Icon(Icons.keyboard_arrow_down, color: context.textMuted),
+                dropdownColor: context.card,
+                borderRadius: BorderRadius.circular(12),
+                elevation: 6,
+                isExpanded: true,
+                style: TextStyle(color: context.textMain),
+                items: items
+                    .map(
+                      (i) => DropdownMenuItem(
+                        value: i,
+                        child: Text(i, overflow: TextOverflow.ellipsis),
+                      ),
+                    )
+                    .toList(),
+                onChanged: onChanged,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isEditing = widget.employeeToEdit != null;
+
+    return Dialog(
+      backgroundColor: context.bg,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      clipBehavior: Clip.antiAlias,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: 950,
+          maxHeight: MediaQuery.of(context).size.height * 0.9,
+        ),
+        child: DialogScrollWrapper(
+          minWidth: 850,
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        isEditing ? 'Редактировать профиль' : 'Новый сотрудник',
+                        style: TextStyle(
+                          color: context.textMain,
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      IconButton(
+                        icon: Icon(Icons.close, color: context.textMuted),
+                        onPressed: () {
+                          Navigator.pop(context);
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  Flexible(
+                    child: SingleChildScrollView(
+                      child: SizedBox(
+                        width: 880,
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            SizedBox(
+                              width: 410,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'ОСНОВНАЯ ИНФОРМАЦИЯ',
+                                    style: TextStyle(
+                                      color: context.primary,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  Row(
+                                    children: [
+                                      GestureDetector(
+                                        onTap: () {
+                                          setState(() {
+                                            _hasAvatar = !_hasAvatar;
+                                          });
+                                        },
+                                        child: CircleAvatar(
+                                          radius: 32,
+                                          backgroundColor: context.border,
+                                          child: _hasAvatar
+                                              ? const Icon(
+                                                  Icons.person,
+                                                  size: 40,
+                                                  color: Colors.white70,
+                                                )
+                                              : Icon(
+                                                  Icons.add_a_photo,
+                                                  size: 24,
+                                                  color: context.textMuted,
+                                                ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 16),
+                                      Expanded(
+                                        child: _buildField(
+                                          'ФИО Сотрудника',
+                                          _nameCtrl,
+                                          isRequired: true,
+                                          hint: 'Иванов Иван',
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        flex: 3,
+                                        child: _buildField(
+                                          'Логин (Генерирует Email)',
+                                          _loginCtrl,
+                                          isRequired: true,
+                                          hint: 'ivanov_i',
+                                          formatters: [
+                                            FilteringTextInputFormatter.allow(
+                                              RegExp(r'[a-zA-Z0-9_]'),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      const SizedBox(width: 16),
+                                      Expanded(
+                                        flex: 2,
+                                        child: _buildField(
+                                          'ПИН ТСД',
+                                          _tsdPinCtrl,
+                                          hint: '0000',
+                                          formatters: [
+                                            FilteringTextInputFormatter
+                                                .digitsOnly,
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: _buildDropdown(
+                                          'Должность',
+                                          _role,
+                                          globalRoles,
+                                          (v) {
+                                            setState(() {
+                                              _role = v!;
+                                            });
+                                          },
+                                        ),
+                                      ),
+                                      const SizedBox(width: 16),
+                                      Expanded(
+                                        child: _buildDropdown(
+                                          'Зона работы',
+                                          _zone,
+                                          globalZones,
+                                          (v) {
+                                            setState(() {
+                                              _zone = v!;
+                                            });
+                                          },
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: _buildDropdown(
+                                          'Тип найма',
+                                          _employment,
+                                          globalEmploymentTypes,
+                                          (v) {
+                                            setState(() {
+                                              _employment = v!;
+                                            });
+                                          },
+                                        ),
+                                      ),
+                                      const SizedBox(width: 16),
+                                      Expanded(
+                                        child: Padding(
+                                          padding: const EdgeInsets.only(
+                                            bottom: 16.0,
+                                          ),
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                'Статус',
+                                                style: TextStyle(
+                                                  color: context.textMuted,
+                                                  fontSize: 12,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 8),
+                                              Container(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 16,
+                                                      vertical: 4,
+                                                    ),
+                                                decoration: BoxDecoration(
+                                                  color: context.card,
+                                                  borderRadius:
+                                                      BorderRadius.circular(12),
+                                                ),
+                                                child: DropdownButtonHideUnderline(
+                                                  child: DropdownButton<String>(
+                                                    value: _status,
+                                                    icon: Icon(
+                                                      Icons.keyboard_arrow_down,
+                                                      color: context.textMuted,
+                                                    ),
+                                                    dropdownColor: context.card,
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          12,
+                                                        ),
+                                                    elevation: 6,
+                                                    isExpanded: true,
+                                                    style: TextStyle(
+                                                      color: context.textMain,
+                                                    ),
+                                                    items: globalStatuses
+                                                        .map(
+                                                          (
+                                                            i,
+                                                          ) => DropdownMenuItem(
+                                                            value: i,
+                                                            child: Text(
+                                                              i,
+                                                              overflow:
+                                                                  TextOverflow
+                                                                      .ellipsis,
+                                                            ),
+                                                          ),
+                                                        )
+                                                        .toList(),
+                                                    onChanged: (v) async {
+                                                      if (v == 'В отпуске' ||
+                                                          v == 'Больничный' ||
+                                                          v == 'Отсутствует') {
+                                                        await _pickAbsenceDateRange();
+                                                        setState(() {
+                                                          _status = v!;
+                                                        });
+                                                      } else {
+                                                        setState(() {
+                                                          _status = v!;
+                                                          _absencePeriod = null;
+                                                        });
+                                                      }
+                                                    },
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  if (_absencePeriod != null)
+                                    Padding(
+                                      padding: const EdgeInsets.only(
+                                        bottom: 16.0,
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Icon(
+                                            Icons.date_range,
+                                            color: context.textMuted,
+                                            size: 16,
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            'Период: $_absencePeriod',
+                                            style: TextStyle(
+                                              color: context.orange,
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          InkWell(
+                                            onTap: _pickAbsenceDateRange,
+                                            child: Text(
+                                              'Изменить',
+                                              style: TextStyle(
+                                                color: context.primary,
+                                                fontSize: 12,
+                                                decoration:
+                                                    TextDecoration.underline,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'ЭКИПИРОВКА',
+                                    style: TextStyle(
+                                      color: context.primary,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: _buildDropdown(
+                                          'Размер одежды',
+                                          _clothes,
+                                          clothesSizes,
+                                          (v) {
+                                            setState(() {
+                                              _clothes = v!;
+                                            });
+                                          },
+                                        ),
+                                      ),
+                                      const SizedBox(width: 16),
+                                      Expanded(
+                                        child: _buildDropdown(
+                                          'Размер обуви',
+                                          _shoes,
+                                          shoeSizes,
+                                          (v) {
+                                            setState(() {
+                                              _shoes = v!;
+                                            });
+                                          },
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  _buildField(
+                                    'Номер шкафчика',
+                                    _lockerCtrl,
+                                    hint: 'Например: 112',
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 60),
+
+                            SizedBox(
+                              width: 410,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'КОНТАКТЫ И СВЯЗЬ',
+                                    style: TextStyle(
+                                      color: context.primary,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  _buildField(
+                                    'Телефон',
+                                    _phoneCtrl,
+                                    hint: '+7 (XXX) XXX-XX-XX',
+                                    formatters: [PhoneInputFormatter()],
+                                  ),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: _buildField(
+                                          'Telegram',
+                                          _tgCtrl,
+                                          hint: 'nickname',
+                                          prefix: '@',
+                                        ),
+                                      ),
+                                      const SizedBox(width: 16),
+                                      Expanded(
+                                        child: _buildField(
+                                          'Корп. Email',
+                                          _emailCtrl,
+                                          readOnly: true,
+                                          hint: 'Автоматически',
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'HR & ОФОРМЛЕНИЕ',
+                                    style: TextStyle(
+                                      color: context.primary,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  _buildField(
+                                    'Дата приема на работу',
+                                    _hireDateCtrl,
+                                    hint: 'Выберите дату',
+                                    readOnly: true,
+                                    onTap: _pickDate,
+                                  ),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: _buildField(
+                                          'Номер договора',
+                                          _contractCtrl,
+                                          hint: '№ договора',
+                                        ),
+                                      ),
+                                      const SizedBox(width: 16),
+                                      Expanded(
+                                        child: _buildField(
+                                          'ИИН',
+                                          _iinCtrl,
+                                          hint: '12 цифр',
+                                          formatters: [
+                                            FilteringTextInputFormatter
+                                                .digitsOnly,
+                                            LengthLimitingTextInputFormatter(
+                                              12,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+
+                                  const SizedBox(height: 8),
+                                  Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(
+                                        'ЗНАНИЕ ЯЗЫКОВ',
+                                        style: TextStyle(
+                                          color: context.primary,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                      InkWell(
+                                        onTap: _addLanguage,
+                                        child: Text(
+                                          '+ Добавить',
+                                          style: TextStyle(
+                                            color: context.primary,
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 16),
+                                  if (_languages.isEmpty)
+                                    Text(
+                                      'Языки не добавлены',
+                                      style: TextStyle(
+                                        color: context.textMuted,
+                                        fontSize: 12,
+                                      ),
+                                    )
+                                  else
+                                    ..._languages.asMap().entries.map((entry) {
+                                      int idx = entry.key;
+                                      Map<String, String> lang = entry.value;
+                                      return Padding(
+                                        padding: const EdgeInsets.only(
+                                          bottom: 8.0,
+                                        ),
+                                        child: Container(
+                                          padding: const EdgeInsets.all(12),
+                                          decoration: BoxDecoration(
+                                            color: context.card,
+                                            borderRadius: BorderRadius.circular(
+                                              8,
+                                            ),
+                                            border: Border.all(
+                                              color: context.border,
+                                            ),
+                                          ),
+                                          child: Row(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.spaceBetween,
+                                            children: [
+                                              Text(
+                                                lang['name']!,
+                                                style: TextStyle(
+                                                  color: context.textMain,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                              Row(
+                                                children: [
+                                                  Text(
+                                                    '${lang['writing']!} / ${lang['speaking']!} / ${lang['understanding']!}',
+                                                    style: TextStyle(
+                                                      color: context.textMuted,
+                                                      fontSize: 12,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 8),
+                                                  InkWell(
+                                                    onTap: () {
+                                                      setState(() {
+                                                        _languages.removeAt(
+                                                          idx,
+                                                        );
+                                                      });
+                                                    },
+                                                    child: const Icon(
+                                                      Icons.close,
+                                                      size: 16,
+                                                      color: Colors.redAccent,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      );
+                                    }),
+                                  const SizedBox(height: 24),
+
+                                  Text(
+                                    'СИСТЕМНЫЕ ПРАВА',
+                                    style: TextStyle(
+                                      color: context.primary,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  Wrap(
+                                    spacing: 8,
+                                    runSpacing: 8,
+                                    children: globalRights.map((right) {
+                                      final isSelected = _selectedRights
+                                          .contains(right);
+                                      return FilterChip(
+                                        label: Text(
+                                          right,
+                                          style: TextStyle(
+                                            color: isSelected
+                                                ? Colors.white
+                                                : context.textMain,
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                        selected: isSelected,
+                                        selectedColor: context.primary,
+                                        backgroundColor: context.card,
+                                        checkmarkColor: Colors.white,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
+                                          side: BorderSide.none,
+                                        ),
+                                        onSelected: (bool selected) {
+                                          setState(() {
+                                            if (selected) {
+                                              _selectedRights.add(right);
+                                            } else {
+                                              _selectedRights.remove(right);
+                                            }
+                                          });
+                                        },
+                                      );
+                                    }).toList(),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: () {
+                          Navigator.pop(context);
+                        },
+                        child: Text(
+                          'Отмена',
+                          style: TextStyle(color: context.textMuted),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      ElevatedButton(
+                        onPressed: () {
+                          if (!_formKey.currentState!.validate()) {
+                            return;
+                          }
+
+                          String tg = _tgCtrl.text.trim();
+                          if (tg.startsWith('@')) {
+                            tg = tg.substring(1);
+                          }
+
+                          Navigator.pop(context, {
+                            'name': _nameCtrl.text.trim(),
+                            'login': _loginCtrl.text.trim(),
+                            'phone': _phoneCtrl.text.trim(),
+                            'telegram': tg,
+                            'email': _emailCtrl.text.trim(),
+                            'hireDate': _hireDateCtrl.text.trim(),
+                            'contract': _contractCtrl.text.trim(),
+                            'iin': _iinCtrl.text.trim(),
+                            'locker': _lockerCtrl.text.trim(),
+                            'tsdPin': _tsdPinCtrl.text.trim(),
+                            'employment': _employment,
+                            'rights': _selectedRights,
+                            'role': _role,
+                            'zone': _zone,
+                            'status': _status,
+                            'clothes': _clothes,
+                            'shoes': _shoes,
+                            'absence': _absencePeriod,
+                            'hasAvatar': _hasAvatar,
+                            'languages': _languages,
+                            'inventory':
+                                widget.employeeToEdit?['inventory'] ??
+                                <Map<String, dynamic>>[],
+                          });
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: context.primary,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 24,
+                            vertical: 16,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: Text(
+                          isEditing ? 'Сохранить изменения' : 'Создать профиль',
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class EmployeeProfileDialog extends StatefulWidget {
+  final Map<String, dynamic> employee;
+  final VoidCallback onEditTap;
+  final VoidCallback onInventoryUpdated;
+
+  const EmployeeProfileDialog({
+    super.key,
+    required this.employee,
+    required this.onEditTap,
+    required this.onInventoryUpdated,
+  });
+
+  @override
+  State<EmployeeProfileDialog> createState() => _EmployeeProfileDialogState();
+}
+
+class _EmployeeProfileDialogState extends State<EmployeeProfileDialog> {
+  IconData _getInventoryIcon(String? type) {
+    switch (type) {
+      case 'Ноутбук / ПК':
+        return Icons.laptop_mac;
+      case 'ТСД Сканер':
+        return Icons.qr_code_scanner;
+      case 'Рация':
+        return Icons.speaker_phone;
+      case 'Спецодежда':
+        return Icons.checkroom;
+      case 'Ключи':
+        return Icons.key;
+      default:
+        return Icons.inventory_2;
+    }
+  }
+
+  void _showInventoryDialog({Map<String, dynamic>? item, int? index}) async {
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (context) {
+        final nameCtrl = TextEditingController(text: item?['name'] ?? '');
+        final detailsCtrl = TextEditingController(text: item?['details'] ?? '');
+        final purposeCtrl = TextEditingController(text: item?['purpose'] ?? '');
+        String condition = item?['condition'] ?? 'Новое';
+        String status = item?['status'] ?? 'Выдано';
+        String invType = item?['type'] ?? globalInventoryTypes[0];
+
+        return StatefulBuilder(
+          builder: (context, setStateSB) {
+            return AlertDialog(
+              backgroundColor: context.bg,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              title: Text(
+                item == null ? 'Выдать имущество' : 'Редактировать имущество',
+                style: TextStyle(
+                  color: context.textMain,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: context.card,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: invType,
+                          icon: Icon(
+                            Icons.keyboard_arrow_down,
+                            color: context.textMuted,
+                          ),
+                          dropdownColor: context.card,
+                          borderRadius: BorderRadius.circular(12),
+                          elevation: 6,
+                          style: TextStyle(color: context.textMain),
+                          isExpanded: true,
+                          items: globalInventoryTypes
+                              .map(
+                                (c) => DropdownMenuItem(
+                                  value: c,
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        _getInventoryIcon(c),
+                                        size: 18,
+                                        color: context.textMuted,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(c),
+                                    ],
+                                  ),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: (v) {
+                            setStateSB(() {
+                              invType = v!;
+                            });
+                          },
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: nameCtrl,
+                      style: TextStyle(color: context.textMain),
+                      decoration: InputDecoration(
+                        filled: true,
+                        fillColor: context.card,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                        hintText: 'Модель (напр. Honeywell)',
+                        hintStyle: TextStyle(
+                          color: context.textMuted.withValues(alpha: 0.5),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: detailsCtrl,
+                      style: TextStyle(color: context.textMain),
+                      decoration: InputDecoration(
+                        filled: true,
+                        fillColor: context.card,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                        hintText: 'Серийный или Инв. номер',
+                        hintStyle: TextStyle(
+                          color: context.textMuted.withValues(alpha: 0.5),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: purposeCtrl,
+                      style: TextStyle(color: context.textMain),
+                      decoration: InputDecoration(
+                        filled: true,
+                        fillColor: context.card,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                        hintText: 'Цель выдачи',
+                        hintStyle: TextStyle(
+                          color: context.textMuted.withValues(alpha: 0.5),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: context.card,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<String>(
+                                value: condition,
+                                icon: Icon(
+                                  Icons.keyboard_arrow_down,
+                                  color: context.textMuted,
+                                ),
+                                dropdownColor: context.card,
+                                borderRadius: BorderRadius.circular(12),
+                                elevation: 6,
+                                style: TextStyle(color: context.textMain),
+                                isExpanded: true,
+                                items:
+                                    [
+                                          'Новое',
+                                          'Хорошее',
+                                          'Б/У',
+                                          'Требует ремонта',
+                                        ]
+                                        .map(
+                                          (c) => DropdownMenuItem(
+                                            value: c,
+                                            child: Text(c),
+                                          ),
+                                        )
+                                        .toList(),
+                                onChanged: (v) {
+                                  setStateSB(() {
+                                    condition = v!;
+                                  });
+                                },
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: context.card,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<String>(
+                                value: status,
+                                icon: Icon(
+                                  Icons.keyboard_arrow_down,
+                                  color: context.textMuted,
+                                ),
+                                dropdownColor: context.card,
+                                borderRadius: BorderRadius.circular(12),
+                                elevation: 6,
+                                style: TextStyle(color: context.textMain),
+                                isExpanded: true,
+                                items: ['Выдано', 'Изъято', 'На ремонте']
+                                    .map(
+                                      (c) => DropdownMenuItem(
+                                        value: c,
+                                        child: Text(c),
+                                      ),
+                                    )
+                                    .toList(),
+                                onChanged: (v) {
+                                  setStateSB(() {
+                                    status = v!;
+                                  });
+                                },
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                  },
+                  child: Text(
+                    'Отмена',
+                    style: TextStyle(color: context.textMuted),
+                  ),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(context, {
+                      'name': nameCtrl.text,
+                      'details': detailsCtrl.text,
+                      'purpose': purposeCtrl.text,
+                      'condition': condition,
+                      'status': status,
+                      'type': invType,
+                      'issueDate': item?['issueDate'],
+                    });
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: context.primary,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: const Text(
+                    'Сохранить',
+                    style: TextStyle(color: Colors.white),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (result != null && result['name'].toString().trim().isNotEmpty) {
+      setState(() {
+        final now = DateTime.now();
+        final dateStr =
+            result['issueDate'] ??
+            "${now.day.toString().padLeft(2, '0')}.${now.month.toString().padLeft(2, '0')}.${now.year}, ${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}";
+
+        final finalItem = <String, dynamic>{
+          'name': result['name'].toString().trim(),
+          'type': result['type'],
+          'details': result['details'].toString().trim(),
+          'purpose': result['purpose'].toString().trim(),
+          'condition': result['condition'],
+          'status': result['status'],
+          'issueDate': dateStr,
+        };
+
+        if (index != null) {
+          (widget.employee['inventory'] as List)[index] = finalItem;
+        } else {
+          (widget.employee['inventory'] as List).insert(0, finalItem);
+        }
+      });
+      widget.onInventoryUpdated();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final emp = widget.employee;
+    final statusColor = getStatusColor(context, emp['status']);
+
+    return Dialog(
+      backgroundColor: context.bg,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      clipBehavior: Clip.antiAlias,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: 1200,
+          maxHeight: MediaQuery.of(context).size.height * 0.9,
+        ),
+        child: DialogScrollWrapper(
+          minWidth: 1050,
+          child: Padding(
+            padding: const EdgeInsets.all(32.0),
+            child: SizedBox(
+              width: 1100,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: DefaultTabController(
+                      length: 6,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Row(
+                                children: [
+                                  IconButton(
+                                    icon: Icon(
+                                      Icons.arrow_back,
+                                      color: context.textMuted,
+                                    ),
+                                    onPressed: () {
+                                      Navigator.pop(context);
+                                    },
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'Профиль сотрудника',
+                                    style: TextStyle(
+                                      color: context.textMuted,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              ElevatedButton.icon(
+                                onPressed: widget.onEditTap,
+                                icon: const Icon(Icons.edit, size: 14),
+                                label: const Text(
+                                  'Редактировать',
+                                  style: TextStyle(fontSize: 13),
+                                ),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: context.primary,
+                                  foregroundColor: Colors.white,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 12,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 24),
+                          TabBar(
+                            dividerColor: context.border,
+                            indicatorColor: context.primary,
+                            labelColor: context.primary,
+                            unselectedLabelColor: context.textMuted,
+                            isScrollable: true,
+                            tabAlignment: TabAlignment.start,
+                            tabs: const [
+                              Tab(text: 'Личное дело'),
+                              Tab(text: 'Доступы и Права'),
+                              Tab(text: 'Эффективность'),
+                              Tab(text: 'Время и Отсутствия'),
+                              Tab(text: 'Имущество'),
+                              Tab(text: 'Хронология'),
+                            ],
+                          ),
+                          SizedBox(
+                            height: 600,
+                            child: TabBarView(
+                              children: [
+                                _buildHRTab(emp),
+                                _buildAccessTab(emp),
+                                _buildEfficiencyTab(emp),
+                                _buildTimeTab(emp),
+                                _buildInventoryTab(emp),
+                                _buildHistoryTab(),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 32),
+
+                  Container(
+                    width: 340,
+                    decoration: BoxDecoration(
+                      color: context.card,
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: context.border),
+                    ),
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(32),
+                      child: Column(
+                        children: [
+                          CircleAvatar(
+                            radius: 56,
+                            backgroundColor: context.surface,
+                            child: emp['hasAvatar'] == true
+                                ? const Icon(
+                                    Icons.person,
+                                    size: 72,
+                                    color: Colors.white70,
+                                  )
+                                : Text(
+                                    emp['name'][0],
+                                    style: TextStyle(
+                                      color: context.textMain,
+                                      fontSize: 48,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            emp['name'],
+                            style: TextStyle(
+                              color: context.textMain,
+                              fontSize: 22,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            emp['role'],
+                            style: TextStyle(
+                              color: context.textMuted,
+                              fontSize: 14,
+                            ),
+                          ),
+
+                          const SizedBox(height: 12),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: context.border,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: SelectableText(
+                              '@${emp['login']}',
+                              style: TextStyle(
+                                color: context.textMuted,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+
+                          Container(
+                            height: 32,
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            decoration: BoxDecoration(
+                              color: statusColor.withValues(alpha: 0.1),
+                              border: Border.all(
+                                color: statusColor.withValues(alpha: 0.3),
+                              ),
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<String>(
+                                alignment: Alignment.center,
+                                value: emp['status'],
+                                icon: Padding(
+                                  padding: const EdgeInsets.only(left: 6.0),
+                                  child: Icon(
+                                    Icons.keyboard_arrow_down,
+                                    color: statusColor,
+                                    size: 16,
+                                  ),
+                                ),
+                                style: TextStyle(
+                                  color: statusColor,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                dropdownColor: context.card,
+                                borderRadius: BorderRadius.circular(12),
+                                elevation: 6,
+                                isDense: true,
+                                onChanged: (newStatus) async {
+                                  if (newStatus == 'В отпуске' ||
+                                      newStatus == 'Больничный' ||
+                                      newStatus == 'Отсутствует') {
+                                    final period = await showDialog<String>(
+                                      context: context,
+                                      builder: (c) => const AbsenceDialog(),
+                                    );
+                                    if (period != null) {
+                                      setState(() {
+                                        emp['status'] = newStatus!;
+                                        emp['absence'] = period;
+                                      });
+                                      widget.onInventoryUpdated();
+                                    }
+                                  } else {
+                                    setState(() {
+                                      emp['status'] = newStatus!;
+                                      emp['absence'] = null;
+                                    });
+                                    widget.onInventoryUpdated();
+                                  }
+                                },
+                                items: globalStatuses
+                                    .map(
+                                      (s) => DropdownMenuItem(
+                                        value: s,
+                                        child: Text(
+                                          s,
+                                          style: TextStyle(
+                                            color: getStatusColor(context, s),
+                                          ),
+                                        ),
+                                      ),
+                                    )
+                                    .toList(),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 32),
+
+                          _buildProfileRow(
+                            Icons.email_outlined,
+                            'Email',
+                            _emptyTo(emp['email'], 'Не указан'),
+                          ),
+                          const SizedBox(height: 16),
+                          _buildProfileRow(
+                            Icons.phone_outlined,
+                            'Телефон',
+                            _emptyTo(emp['phone'], 'Не указан'),
+                          ),
+                          const SizedBox(height: 16),
+                          _buildProfileRow(
+                            Icons.telegram,
+                            'Telegram',
+                            emp['telegram']?.isNotEmpty == true
+                                ? '@${emp['telegram']}'
+                                : 'Не привязан',
+                          ),
+                          const SizedBox(height: 16),
+                          _buildProfileRow(
+                            Icons.location_on_outlined,
+                            'Зона',
+                            emp['zone'],
+                          ),
+                          const SizedBox(height: 16),
+                          _buildProfileRow(
+                            Icons.calendar_today_outlined,
+                            'Прием на работу',
+                            _emptyTo(emp['hireDate'], 'Не указана'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProfileRow(IconData icon, String label, String value) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: context.surface,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, size: 16, color: context.textMuted),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: TextStyle(color: context.textMuted, fontSize: 11),
+              ),
+              const SizedBox(height: 4),
+              SelectableText(
+                value,
+                style: TextStyle(
+                  color: context.textMain,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCompactLanguages(List<dynamic>? languages) {
+    if (languages == null || languages.isEmpty) {
+      return Text(
+        'Языки не добавлены',
+        style: TextStyle(color: context.textMuted, fontSize: 13),
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: languages.map((lang) {
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                lang['name'],
+                style: TextStyle(
+                  color: context.textMain,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  _buildLangLevel('Письмо', lang['writing']),
+                  _buildLangLevel('Говорение', lang['speaking']),
+                  _buildLangLevel('Понимание', lang['understanding']),
+                ],
+              ),
+            ],
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildLangLevel(String label, String level) {
+    Color levelColor = context.textMuted;
+    if (level == 'Отлично' || level == 'Родной') {
+      levelColor = Colors.greenAccent;
+    }
+    if (level == 'Хорошо') {
+      levelColor = context.primary;
+    }
+    if (level == 'Слабо') {
+      levelColor = Colors.orangeAccent;
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: TextStyle(color: context.textMuted, fontSize: 10)),
+        const SizedBox(height: 4),
+        Text(
+          level,
+          style: TextStyle(
+            color: levelColor,
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildHRTab(Map<String, dynamic> emp) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.only(top: 24, bottom: 24, right: 16),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              children: [
+                _buildInfoCard('Кадровые данные', [
+                  _buildDataRow(
+                    Icons.badge,
+                    'ИИН',
+                    _emptyTo(emp['iin'], 'Нет данных'),
+                  ),
+                  _buildDataRow(
+                    Icons.description,
+                    'Номер договора',
+                    _emptyTo(emp['contract'], 'Нет данных'),
+                  ),
+                  _buildDataRow(
+                    Icons.work_outline,
+                    'Тип найма',
+                    _emptyTo(emp['employment'], 'Не указан'),
+                  ),
+                ]),
+                const SizedBox(height: 24),
+                _buildInfoCard('Владение языками', [
+                  _buildCompactLanguages(emp['languages']),
+                ]),
+              ],
+            ),
+          ),
+          const SizedBox(width: 24),
+          Expanded(
+            child: Column(
+              children: [
+                _buildInfoCard('Складская Экипировка', [
+                  _buildDataRow(
+                    Icons.checkroom,
+                    'Размер одежды',
+                    _emptyTo(emp['clothes'], 'Не выдан'),
+                  ),
+                  _buildDataRow(
+                    Icons.snowshoeing,
+                    'Размер обуви',
+                    _emptyTo(emp['shoes'], 'Не выдана'),
+                  ),
+                  _buildDataRow(
+                    Icons.door_sliding,
+                    'Шкафчик',
+                    _emptyTo(emp['locker'], 'Не закреплен'),
+                  ),
+                ]),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _emptyTo(String? val, String fallback) {
+    if (val == null || val.trim().isEmpty) {
+      return fallback;
+    }
+    return val;
+  }
+
+  Widget _buildAccessTab(Map<String, dynamic> emp) {
+    List<String> rights = List<String>.from(emp['rights'] ?? []);
+    return ListView(
+      padding: const EdgeInsets.only(top: 24, bottom: 24, right: 16),
+      children: [
+        _buildInfoCard('Авторизация в системах', [
+          _buildDataRow(
+            Icons.pin,
+            'ПИН-код для ТСД',
+            _emptyTo(emp['tsdPin'], 'Не задан'),
+          ),
+          _buildDataRow(Icons.login, 'Последний вход', 'Сегодня, 08:15 AM'),
+        ]),
+        const SizedBox(height: 24),
+        _buildInfoCard('Выданные системные права', [
+          rights.isEmpty
+              ? Text(
+                  'Нет выданных прав',
+                  style: TextStyle(color: context.textMuted),
+                )
+              : Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: rights
+                      .map(
+                        (r) => Chip(
+                          label: Text(r),
+                          backgroundColor: context.border,
+                          side: BorderSide.none,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                      )
+                      .toList(),
+                ),
+        ]),
+      ],
+    );
+  }
+
+  Widget _buildEfficiencyTab(Map<String, dynamic> emp) {
+    return ListView(
+      padding: const EdgeInsets.only(top: 24, bottom: 24, right: 16),
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: _buildInfoCard('Показатели KPI (Текущий месяц)', [
+                _buildDataRow(Icons.speed, 'Скорость сборки', '124 строк/час'),
+                _buildDataRow(Icons.task_alt, 'Ошибок сборки', '2 (0.1%)'),
+              ]),
+            ),
+            const SizedBox(width: 24),
+            Expanded(
+              child: _buildInfoCard('Сводка', [
+                _buildDataRow(
+                  Icons.trending_up,
+                  'Тренд',
+                  'Положительный (+5%)',
+                ),
+                _buildDataRow(Icons.star_border, 'Рейтинг смены', '4.8 / 5.0'),
+              ]),
+            ),
+          ],
+        ),
+        const SizedBox(height: 24),
+        Container(
+          height: 250,
+          decoration: BoxDecoration(
+            color: context.card,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: context.border),
+          ),
+          child: Center(
+            child: Text(
+              'График производительности (в разработке)',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: context.textMuted,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTimeTab(Map<String, dynamic> emp) {
+    return ListView(
+      padding: const EdgeInsets.only(top: 24, bottom: 24, right: 16),
+      children: [
+        if (emp['absence'] != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 24.0),
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: context.orange.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: context.orange.withValues(alpha: 0.3),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.warning_amber_rounded, color: context.orange),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Text(
+                      'Сотрудник отсутствует: ${emp['absence']}',
+                      style: TextStyle(
+                        color: context.orange,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        Row(
+          children: [
+            Expanded(
+              child: _buildInfoCard('Баланс времени (Февраль)', [
+                _buildDataRow(Icons.timer, 'Отработано', '144 часа'),
+                _buildDataRow(Icons.calendar_today, 'Смен', '12 смен'),
+              ]),
+            ),
+            const SizedBox(width: 24),
+            Expanded(
+              child: _buildInfoCard('Отпуска и Отгулы', [
+                _buildDataRow(Icons.beach_access, 'Остаток отпуска', '14 дней'),
+                _buildDataRow(
+                  Icons.medical_services,
+                  'Больничных в году',
+                  '0 дней',
+                ),
+              ]),
+            ),
+          ],
+        ),
+        const SizedBox(height: 24),
+        // ИСПРАВЛЕНО: Интерактивный UI-блок графика смен вместо простого текста
+        Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: context.card,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: context.border),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'График смен (Февраль)',
+                    style: TextStyle(
+                      color: context.textMain,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Row(
+                    children: [
+                      Container(
+                        width: 12,
+                        height: 12,
+                        decoration: BoxDecoration(
+                          color: context.primary,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Смена',
+                        style: TextStyle(
+                          color: context.textMuted,
+                          fontSize: 12,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Container(
+                        width: 12,
+                        height: 12,
+                        decoration: BoxDecoration(
+                          color: context.surface,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: context.border),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Выходной',
+                        style: TextStyle(
+                          color: context.textMuted,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: List.generate(28, (index) {
+                  int day = index + 1;
+                  // Имитация графика 2/2
+                  bool isShift = (index % 4 == 0) || (index % 4 == 1);
+                  return Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: isShift ? context.primary : context.surface,
+                      borderRadius: BorderRadius.circular(8),
+                      border: isShift
+                          ? null
+                          : Border.all(color: context.border),
+                    ),
+                    child: Center(
+                      child: Text(
+                        day.toString(),
+                        style: TextStyle(
+                          color: isShift ? Colors.white : context.textMain,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                  );
+                }),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildInventoryTab(Map<String, dynamic> emp) {
+    List<dynamic> inventory = emp['inventory'] ?? [];
+    return ListView(
+      padding: const EdgeInsets.only(top: 24, bottom: 24, right: 16),
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Физическое имущество на руках',
+              style: TextStyle(
+                color: context.textMain,
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            TextButton.icon(
+              onPressed: () {
+                _showInventoryDialog();
+              },
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('Выдать'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Container(
+          decoration: BoxDecoration(
+            color: context.card,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: context.border),
+          ),
+          child: inventory.isEmpty
+              ? Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Text(
+                    'Имущество не выдано',
+                    style: TextStyle(color: context.textMuted),
+                  ),
+                )
+              : Column(
+                  children: List.generate(inventory.length, (index) {
+                    final item = inventory[index];
+                    final isWithdrawn = item['status'] == 'Изъято';
+                    final isRepair = item['status'] == 'На ремонте';
+
+                    Color statusColor = Colors.greenAccent;
+                    if (isWithdrawn) {
+                      statusColor = Colors.grey;
+                    }
+                    if (isRepair) {
+                      statusColor = Colors.orangeAccent;
+                    }
+
+                    return ListTile(
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 8,
+                      ),
+                      leading: Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: context.border,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          _getInventoryIcon(item['type']),
+                          color: isWithdrawn
+                              ? context.textMuted
+                              : context.textMain,
+                          size: 24,
+                        ),
+                      ),
+                      title: Row(
+                        children: [
+                          Text(
+                            item['name'],
+                            style: TextStyle(
+                              color: isWithdrawn
+                                  ? context.textMuted
+                                  : context.textMain,
+                              fontWeight: FontWeight.bold,
+                              decoration: isWithdrawn
+                                  ? TextDecoration.lineThrough
+                                  : null,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: statusColor.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              item['status'],
+                              style: TextStyle(
+                                color: statusColor,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      subtitle: Padding(
+                        padding: const EdgeInsets.only(top: 6.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '${item['details']} • Состояние: ${item['condition'] ?? 'Не указано'}',
+                              style: TextStyle(
+                                color: context.textMuted,
+                                fontSize: 13,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Выдано: ${item['issueDate']} ${item['purpose']?.isNotEmpty == true ? '(${item['purpose']})' : ''}',
+                              style: TextStyle(
+                                color: context.textMuted.withValues(alpha: 0.6),
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      trailing: IconButton(
+                        icon: Icon(Icons.edit, color: context.textMuted),
+                        onPressed: () {
+                          _showInventoryDialog(item: item, index: index);
+                        },
+                        tooltip: 'Редактировать статус/детали',
+                      ),
+                    );
+                  }),
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildHistoryTab() {
+    final history = [
+      {
+        'date': '20 Фев 2026, 08:00',
+        'type': 'Смена статуса',
+        'desc': 'Статус изменен на "Активен"',
+      },
+      {
+        'date': '15 Фев 2026, 10:30',
+        'type': 'Оборудование',
+        'desc': 'Выдан ТСД Сканер (Инв. №4402)',
+      },
+      {
+        'date': '10 Янв 2026, 14:00',
+        'type': 'Инструктаж',
+        'desc': 'Пройден инструктаж ТБ (Безопасный нож)',
+      },
+      {
+        'date': '12 Авг 2024, 09:00',
+        'type': 'Оформление',
+        'desc': 'Сотрудник добавлен в систему',
+      },
+    ];
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.only(top: 24, bottom: 24, right: 16),
+      child: Container(
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: context.card,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: context.border),
+        ),
+        child: DataTable(
+          headingTextStyle: TextStyle(
+            color: context.textMuted,
+            fontWeight: FontWeight.bold,
+            fontSize: 12,
+          ),
+          dataTextStyle: TextStyle(color: context.textMain, fontSize: 14),
+          dividerThickness: 1,
+          columns: const [
+            DataColumn(label: Text('ДАТА И ВРЕМЯ')),
+            DataColumn(label: Text('СОБЫТИЕ')),
+            DataColumn(label: Text('ОПИСАНИЕ')),
+          ],
+          rows: history
+              .map(
+                (h) => DataRow(
+                  cells: [
+                    DataCell(
+                      Text(
+                        h['date']!,
+                        style: TextStyle(color: context.textMuted),
+                      ),
+                    ),
+                    DataCell(
+                      Text(
+                        h['type']!,
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    DataCell(Text(h['desc']!)),
+                  ],
+                ),
+              )
+              .toList(),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInfoCard(
+    String title,
+    List<Widget> children, {
+    double padding = 24.0,
+  }) {
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: context.card,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: context.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: EdgeInsets.only(
+              top: padding == 0 ? 24 : padding,
+              left: 24,
+              right: 24,
+              bottom: 16,
+            ),
+            child: Text(
+              title,
+              style: TextStyle(
+                color: context.textMain,
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          Padding(
+            padding: EdgeInsets.only(
+              left: padding == 0 ? 0 : padding,
+              right: padding == 0 ? 0 : padding,
+              bottom: padding == 0 ? 0 : padding,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: children,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDataRow(IconData icon, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: context.textMuted, size: 18),
+          const SizedBox(width: 12),
+          Expanded(
+            flex: 1,
+            child: Text(
+              label,
+              style: TextStyle(color: context.textMuted, fontSize: 13),
+            ),
+          ),
+          Expanded(
+            flex: 1,
+            child: SelectableText(
+              value,
+              style: TextStyle(
+                color: context.textMain,
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
