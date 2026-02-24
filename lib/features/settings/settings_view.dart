@@ -122,7 +122,7 @@ class ThemeSettingsDialog extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: ConstrainedBox(
         constraints: const BoxConstraints(
-          maxWidth: 500,
+          maxWidth: 680,
           maxHeight: 750,
         ), // Жесткая высота защищает от Overflow
         child: SingleChildScrollView(
@@ -232,6 +232,11 @@ class ThemeSettingsDialog extends StatelessWidget {
                                 'AMOLED',
                                 'Ocean Dark',
                                 'Dracula',
+                                'Graphite Dark',
+                                'Nord Dark',
+                                'Deep Space',
+                                'Forest Night',
+                                'Solarized Dark',
                               ]
                             : [
                                 'Стандартная',
@@ -239,6 +244,11 @@ class ThemeSettingsDialog extends StatelessWidget {
                                 'Чистый белый',
                                 'Warm Light',
                                 'Corporate',
+                                'Документ',
+                                'Pastel',
+                                'High Contrast Light',
+                                'Warm Gray',
+                                'Cool Gray',
                               ];
                         return Wrap(
                           spacing: 12,

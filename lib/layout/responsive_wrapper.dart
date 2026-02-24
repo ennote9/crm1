@@ -8,7 +8,7 @@ class ResponsiveScrollWrapper extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        const double minWidth = 1100.0;
+        const double minWidth = 1200.0;
         const double minHeight = 700.0;
         Widget content = child;
         if (constraints.maxHeight < minHeight) {

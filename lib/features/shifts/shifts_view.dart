@@ -1710,49 +1710,39 @@ class _ShiftsViewState extends State<ShiftsView> {
                           return ValueListenableBuilder<bool>(
                             valueListenable: isViewModified,
                             builder: (context, isMod, _) {
-                              final bool highlight =
-                                  false; // фикс: не меняем стиль кнопки после применения настроек
                               return Container(
-                                margin: const EdgeInsets.only(right: 16),
-                                height:
-                                    48, // ИСПРАВЛЕНО: Кнопка имеет такую же высоту, как "Добавить"
+                                margin: const EdgeInsets.only(right: 12),
+                                height: 44,
                                 child: OutlinedButton.icon(
                                   icon: Icon(
                                     Icons.tune,
                                     size: 16,
-                                    color: highlight
-                                        ? context.primary
-                                        : context.textMain,
+                                    color: context.textMain,
                                   ),
                                   label: Text(
                                     viewName + (isMod ? '*' : ''),
                                     style: TextStyle(
-                                      color: highlight
-                                          ? context.primary
-                                          : context.textMain,
+                                      color: context.textMain,
                                     ),
                                   ),
-                                  onPressed: () =>
-                                      showDialog(
-                                        context: context,
-                                        builder: (c) =>
-                                            const ViewSettingsDialog(),
-                                      ).then((_) {
-                                        if (mounted) {
-                                          setState(() {});
-                                        }
-                                      }),
+                                  onPressed: () => showDialog(
+                                    context: context,
+                                    builder: (c) =>
+                                        const ViewSettingsDialog(),
+                                  ).then((_) {
+                                    if (mounted) {
+                                      setState(() {});
+                                    }
+                                  }),
                                   style: OutlinedButton.styleFrom(
                                     side: BorderSide(
-                                      color: highlight
-                                          ? context.primary
-                                          : context.border,
+                                      color: context.border,
                                     ),
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(12),
                                     ),
                                     padding: const EdgeInsets.symmetric(
-                                      horizontal: 16,
+                                      horizontal: 14,
                                     ),
                                   ),
                                 ),
@@ -1762,7 +1752,7 @@ class _ShiftsViewState extends State<ShiftsView> {
                         },
                       ),
                       SizedBox(
-                        height: 48,
+                        height: 44,
                         child: ElevatedButton.icon(
                           onPressed: _showAddEmployeeModal,
                           icon: const Icon(Icons.add),
@@ -1770,7 +1760,9 @@ class _ShiftsViewState extends State<ShiftsView> {
                           style: ElevatedButton.styleFrom(
                             backgroundColor: context.primary,
                             foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(horizontal: 24),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 20,
+                            ),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
                             ),
@@ -1859,8 +1851,9 @@ class _ShiftsViewState extends State<ShiftsView> {
                 ),
                 child: LayoutBuilder(
                   builder: (context, constraints) {
-                    // ИСПРАВЛЕНО: Полоса фильтров тянется на всю длину
-                    double minWidth = 1140;
+                    // ИСПРАВЛЕНО: Полоса фильтров тянется на всю длину.
+                    // Синхронизируем с минимальной шириной контента, чтобы не провоцировать лишний горизонтальный скролл.
+                    double minWidth = 1200;
                     double w = constraints.maxWidth > minWidth
                         ? constraints.maxWidth
                         : minWidth;
@@ -1872,6 +1865,7 @@ class _ShiftsViewState extends State<ShiftsView> {
                       child: SingleChildScrollView(
                         controller: _filtersScrollController,
                         scrollDirection: Axis.horizontal,
+                        physics: const NeverScrollableScrollPhysics(),
                         child: SizedBox(
                           width: w,
                           child: Row(
@@ -1997,8 +1991,7 @@ class _ShiftsViewState extends State<ShiftsView> {
 
                     return LayoutBuilder(
                       builder: (context, constraints) {
-                        double totalWidth =
-                            visibleCols.fold(
+                        double totalWidth = visibleCols.fold(
                               0.0,
                               (sum, col) => sum + col.width,
                             ) +
@@ -2007,216 +2000,210 @@ class _ShiftsViewState extends State<ShiftsView> {
                             ? totalWidth
                             : constraints.maxWidth;
 
-                        return Scrollbar(
+                        return SingleChildScrollView(
                           controller: _tableScrollController,
-                          thumbVisibility: true,
-                          child: SingleChildScrollView(
-                            controller: _tableScrollController,
-                            scrollDirection: Axis.horizontal,
-                            child: ConstrainedBox(
-                              constraints: BoxConstraints(
-                                minWidth: constraints.maxWidth,
-                              ),
-                              child: SizedBox(
-                                width: tableWidth,
-                                child: Column(
-                                  children: [
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 24,
-                                        vertical: 16,
+                          scrollDirection: Axis.horizontal,
+                          child: ConstrainedBox(
+                            constraints: BoxConstraints(
+                              minWidth: constraints.maxWidth,
+                            ),
+                            child: SizedBox(
+                              width: tableWidth,
+                              child: Column(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 24,
+                                      vertical: 16,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: context.card,
+                                      borderRadius: const BorderRadius.only(
+                                        topLeft: Radius.circular(16),
+                                        topRight: Radius.circular(16),
                                       ),
-                                      decoration: BoxDecoration(
-                                        color: context.card,
-                                        borderRadius: const BorderRadius.only(
-                                          topLeft: Radius.circular(16),
-                                          topRight: Radius.circular(16),
-                                        ),
-                                      ),
-                                      child: Row(
-                                        children: [
-                                          ...visibleCols.map(
-                                            (c) => SizedBox(
-                                              width: c.width,
-                                              child: Text(
-                                                c.title.toUpperCase(),
-                                                style: TextStyle(
-                                                  color: context.textMuted,
-                                                  fontWeight: FontWeight.bold,
-                                                  fontSize: 12,
-                                                ),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        ...visibleCols.map(
+                                          (c) => SizedBox(
+                                            width: c.width,
+                                            child: Text(
+                                              c.title.toUpperCase(),
+                                              style: TextStyle(
+                                                color: context.textMuted,
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 12,
                                               ),
                                             ),
                                           ),
-                                          const Spacer(),
-                                          const SizedBox(width: 32),
-                                        ],
-                                      ),
-                                    ),
-                                    Expanded(
-                                      child: Container(
-                                        decoration: BoxDecoration(
-                                          color: context.surface,
-                                          borderRadius: const BorderRadius.only(
-                                            bottomLeft: Radius.circular(16),
-                                            bottomRight: Radius.circular(16),
-                                          ),
                                         ),
-                                        child: ListView.separated(
-                                          itemCount: currentList.length,
-                                          separatorBuilder: (context, index) =>
-                                              Divider(
-                                                color: context.border,
-                                                height: 1,
-                                              ),
-                                          itemBuilder: (context, index) {
-                                            final emp = currentList[index];
-                                            final originalIndex = employees
-                                                .indexOf(emp);
+                                        const Spacer(),
+                                        const SizedBox(width: 32),
+                                      ],
+                                    ),
+                                  ),
+                                  Expanded(
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        color: context.surface,
+                                        borderRadius: const BorderRadius.only(
+                                          bottomLeft: Radius.circular(16),
+                                          bottomRight: Radius.circular(16),
+                                        ),
+                                      ),
+                                      child: ListView.separated(
+                                        itemCount: currentList.length,
+                                        separatorBuilder: (context, index) =>
+                                            Divider(
+                                              color: context.border,
+                                              height: 1,
+                                            ),
+                                        itemBuilder: (context, index) {
+                                          final emp = currentList[index];
+                                          final originalIndex =
+                                              employees.indexOf(emp);
 
-                                            return InkWell(
-                                              onTap: () {
-                                                _showEmployeeProfile(
-                                                  originalIndex,
-                                                  emp,
-                                                );
-                                              },
-                                              hoverColor: context.hover,
-                                              child: Padding(
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                      horizontal: 24,
-                                                      vertical: 16,
+                                          return InkWell(
+                                            onTap: () {
+                                              _showEmployeeProfile(
+                                                originalIndex,
+                                                emp,
+                                              );
+                                            },
+                                            hoverColor: context.hover,
+                                            child: Padding(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                horizontal: 24,
+                                                vertical: 16,
+                                              ),
+                                              child: Row(
+                                                children: [
+                                                  ...visibleCols.map(
+                                                    (c) => SizedBox(
+                                                      width: c.width,
+                                                      child: _buildCell(
+                                                        c,
+                                                        emp,
+                                                        originalIndex,
+                                                      ),
                                                     ),
-                                                child: Row(
-                                                  children: [
-                                                    ...visibleCols.map(
-                                                      (c) => SizedBox(
-                                                        width: c.width,
-                                                        child: _buildCell(
-                                                          c,
-                                                          emp,
+                                                  ),
+                                                  const Spacer(),
+                                                  PopupMenuButton<String>(
+                                                    icon: Icon(
+                                                      Icons.more_vert,
+                                                      color: context.textMuted,
+                                                    ),
+                                                    color: context.hover,
+                                                    shape:
+                                                        RoundedRectangleBorder(
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                        12,
+                                                      ),
+                                                    ),
+                                                    onSelected: (value) {
+                                                      if (value == 'profile') {
+                                                        _showEmployeeProfile(
                                                           originalIndex,
-                                                        ),
-                                                      ),
-                                                    ),
-                                                    const Spacer(),
-                                                    PopupMenuButton<String>(
-                                                      icon: Icon(
-                                                        Icons.more_vert,
-                                                        color:
-                                                            context.textMuted,
-                                                      ),
-                                                      color: context.hover,
-                                                      shape: RoundedRectangleBorder(
-                                                        borderRadius:
-                                                            BorderRadius.circular(
-                                                              12,
+                                                          emp,
+                                                        );
+                                                      }
+                                                      if (value == 'edit') {
+                                                        _showEditEmployeeModal(
+                                                          originalIndex,
+                                                          emp,
+                                                        );
+                                                      }
+                                                      if (value == 'archive') {
+                                                        _archiveEmployee(
+                                                          originalIndex,
+                                                        );
+                                                      }
+                                                    },
+                                                    itemBuilder: (context) => [
+                                                      PopupMenuItem(
+                                                        value: 'profile',
+                                                        child: Row(
+                                                          children: [
+                                                            Icon(
+                                                              Icons.person,
+                                                              color: context
+                                                                  .textMain,
+                                                              size: 20,
                                                             ),
+                                                            const SizedBox(
+                                                              width: 12,
+                                                            ),
+                                                            Text(
+                                                              'Профиль',
+                                                              style: TextStyle(
+                                                                color: context
+                                                                    .textMain,
+                                                              ),
+                                                            ),
+                                                          ],
+                                                        ),
                                                       ),
-                                                      onSelected: (value) {
-                                                        if (value ==
-                                                            'profile') {
-                                                          _showEmployeeProfile(
-                                                            originalIndex,
-                                                            emp,
-                                                          );
-                                                        }
-                                                        if (value == 'edit') {
-                                                          _showEditEmployeeModal(
-                                                            originalIndex,
-                                                            emp,
-                                                          );
-                                                        }
-                                                        if (value ==
-                                                            'archive') {
-                                                          _archiveEmployee(
-                                                            originalIndex,
-                                                          );
-                                                        }
-                                                      },
-                                                      itemBuilder: (context) => [
-                                                        PopupMenuItem(
-                                                          value: 'profile',
-                                                          child: Row(
-                                                            children: [
-                                                              Icon(
-                                                                Icons.person,
+                                                      PopupMenuItem(
+                                                        value: 'edit',
+                                                        child: Row(
+                                                          children: [
+                                                            Icon(
+                                                              Icons.edit,
+                                                              color: context
+                                                                  .textMain,
+                                                              size: 20,
+                                                            ),
+                                                            const SizedBox(
+                                                              width: 12,
+                                                            ),
+                                                            Text(
+                                                              'Редактировать',
+                                                              style: TextStyle(
                                                                 color: context
                                                                     .textMain,
-                                                                size: 20,
                                                               ),
-                                                              const SizedBox(
-                                                                width: 12,
-                                                              ),
-                                                              Text(
-                                                                'Профиль',
-                                                                style: TextStyle(
-                                                                  color: context
-                                                                      .textMain,
-                                                                ),
-                                                              ),
-                                                            ],
-                                                          ),
+                                                            ),
+                                                          ],
                                                         ),
-                                                        PopupMenuItem(
-                                                          value: 'edit',
-                                                          child: Row(
-                                                            children: [
-                                                              Icon(
-                                                                Icons.edit,
-                                                                color: context
-                                                                    .textMain,
-                                                                size: 20,
-                                                              ),
-                                                              const SizedBox(
-                                                                width: 12,
-                                                              ),
-                                                              Text(
-                                                                'Редактировать',
-                                                                style: TextStyle(
-                                                                  color: context
-                                                                      .textMain,
-                                                                ),
-                                                              ),
-                                                            ],
-                                                          ),
-                                                        ),
-                                                        const PopupMenuItem(
-                                                          value: 'archive',
-                                                          child: Row(
-                                                            children: [
-                                                              Icon(
-                                                                Icons.archive,
+                                                      ),
+                                                      const PopupMenuItem(
+                                                        value: 'archive',
+                                                        child: Row(
+                                                          children: [
+                                                            Icon(
+                                                              Icons.archive,
+                                                              color: Colors
+                                                                  .redAccent,
+                                                              size: 20,
+                                                            ),
+                                                            SizedBox(
+                                                              width: 12,
+                                                            ),
+                                                            Text(
+                                                              'В архив',
+                                                              style: TextStyle(
                                                                 color: Colors
                                                                     .redAccent,
-                                                                size: 20,
                                                               ),
-                                                              SizedBox(
-                                                                width: 12,
-                                                              ),
-                                                              Text(
-                                                                'В архив',
-                                                                style: TextStyle(
-                                                                  color: Colors
-                                                                      .redAccent,
-                                                                ),
-                                                              ),
-                                                            ],
-                                                          ),
+                                                            ),
+                                                          ],
                                                         ),
-                                                      ],
-                                                    ),
-                                                  ],
-                                                ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ],
                                               ),
-                                            );
-                                          },
-                                        ),
+                                            ),
+                                          );
+                                        },
                                       ),
                                     ),
-                                  ],
-                                ),
+                                  ),
+                                ],
                               ),
                             ),
                           ),
@@ -2599,7 +2586,21 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
     final result = await showDialog<Map<String, String>>(
       context: context,
       builder: (context) {
-        String lang = 'Английский';
+        const availableLanguages = [
+          'Английский',
+          'Казахский',
+          'Русский',
+          'Китайский',
+          'Узбекский',
+        ];
+        final usedNames = _languages
+            .map((l) => l['name'])
+            .whereType<String>()
+            .toSet();
+        String lang = availableLanguages.firstWhere(
+          (l) => !usedNames.contains(l),
+          orElse: () => availableLanguages.first,
+        );
         String write = 'Хорошо';
         String speak = 'Хорошо';
         String understand = 'Хорошо';
@@ -2619,10 +2620,21 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
+              content: SizedBox(
+                width: 320,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Язык',
+                      style: TextStyle(
+                        color: context.textMuted,
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12),
                     decoration: BoxDecoration(
                       color: context.card,
@@ -2639,21 +2651,14 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
                           Icons.keyboard_arrow_down,
                           color: context.textMuted,
                         ),
-                        items:
-                            [
-                                  'Английский',
-                                  'Казахский',
-                                  'Русский',
-                                  'Китайский',
-                                  'Узбекский',
-                                ]
-                                .map(
-                                  (c) => DropdownMenuItem(
-                                    value: c,
-                                    child: Text(c),
-                                  ),
-                                )
-                                .toList(),
+                        items: availableLanguages
+                            .map(
+                              (c) => DropdownMenuItem(
+                                value: c,
+                                child: Text(c),
+                              ),
+                            )
+                            .toList(),
                         onChanged: (v) {
                           setStateSB(() {
                             lang = v!;
@@ -2661,9 +2666,17 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
                         },
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  Container(
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Письменная речь',
+                      style: TextStyle(
+                        color: context.textMuted,
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12),
                     decoration: BoxDecoration(
                       color: context.card,
@@ -2692,9 +2705,17 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
                         },
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  Container(
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Устная речь',
+                      style: TextStyle(
+                        color: context.textMuted,
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12),
                     decoration: BoxDecoration(
                       color: context.card,
@@ -2723,9 +2744,17 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
                         },
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  Container(
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Понимание',
+                      style: TextStyle(
+                        color: context.textMuted,
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12),
                     decoration: BoxDecoration(
                       color: context.card,
@@ -2754,8 +2783,9 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
                         },
                       ),
                     ),
-                  ),
-                ],
+                    ),
+                  ],
+                ),
               ),
               actions: [
                 TextButton(
@@ -2796,7 +2826,18 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
 
     if (result != null) {
       setState(() {
-        _languages.add(result);
+        // Если язык уже есть в списке, просто обновим уровни, а не будем дублировать строку.
+        final existingIndex = _languages.indexWhere(
+          (l) => l['name'] == result['name'],
+        );
+        if (existingIndex != -1) {
+          _languages[existingIndex] = result;
+        } else {
+          _languages.add(result);
+        }
+        _languages.sort(
+          (a, b) => (a['name'] ?? '').compareTo(b['name'] ?? ''),
+        );
       });
     }
   }
@@ -4556,35 +4597,152 @@ class _EmployeeProfileDialogState extends State<EmployeeProfileDialog> {
                 ],
               ),
               const SizedBox(height: 24),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: List.generate(28, (index) {
-                  int day = index + 1;
-                  // Имитация графика 2/2
-                  bool isShift = (index % 4 == 0) || (index % 4 == 1);
-                  return Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      color: isShift ? context.primary : context.surface,
-                      borderRadius: BorderRadius.circular(8),
-                      border: isShift
-                          ? null
-                          : Border.all(color: context.border),
-                    ),
-                    child: Center(
-                      child: Text(
-                        day.toString(),
-                        style: TextStyle(
-                          color: isShift ? Colors.white : context.textMain,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13,
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      SizedBox(
+                        width: 36,
+                        child: Center(
+                          child: Text(
+                            'Пн',
+                            style: TextStyle(
+                              color: context.textMuted,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                         ),
                       ),
-                    ),
-                  );
-                }),
+                      SizedBox(
+                        width: 36,
+                        child: Center(
+                          child: Text(
+                            'Вт',
+                            style: TextStyle(
+                              color: context.textMuted,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                      SizedBox(
+                        width: 36,
+                        child: Center(
+                          child: Text(
+                            'Ср',
+                            style: TextStyle(
+                              color: context.textMuted,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                      SizedBox(
+                        width: 36,
+                        child: Center(
+                          child: Text(
+                            'Чт',
+                            style: TextStyle(
+                              color: context.textMuted,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                      SizedBox(
+                        width: 36,
+                        child: Center(
+                          child: Text(
+                            'Пт',
+                            style: TextStyle(
+                              color: context.textMuted,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                      SizedBox(
+                        width: 36,
+                        child: Center(
+                          child: Text(
+                            'Сб',
+                            style: TextStyle(
+                              color: context.textMuted,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                      SizedBox(
+                        width: 36,
+                        child: Center(
+                          child: Text(
+                            'Вс',
+                            style: TextStyle(
+                              color: context.textMuted,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Column(
+                    children: List.generate(4, (week) {
+                      return Padding(
+                        padding: EdgeInsets.only(top: week == 0 ? 0 : 6),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: List.generate(7, (weekday) {
+                            final index = week * 7 + weekday;
+                            final day = index + 1;
+                            if (day > 28) {
+                              return const SizedBox(width: 36, height: 36);
+                            }
+                            // Имитация графика 2/2
+                            final isShift =
+                                (index % 4 == 0) || (index % 4 == 1);
+                            return Container(
+                              width: 36,
+                              height: 36,
+                              decoration: BoxDecoration(
+                                color: isShift
+                                    ? context.primary
+                                    : context.surface,
+                                borderRadius: BorderRadius.circular(8),
+                                border: isShift
+                                    ? null
+                                    : Border.all(color: context.border),
+                              ),
+                              child: Center(
+                                child: Text(
+                                  day.toString(),
+                                  style: TextStyle(
+                                    color: isShift
+                                        ? Colors.white
+                                        : context.textMain,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ),
+                            );
+                          }),
+                        ),
+                      );
+                    }),
+                  ),
+                ],
               ),
             ],
           ),
@@ -4739,7 +4897,7 @@ class _EmployeeProfileDialogState extends State<EmployeeProfileDialog> {
     );
   }
 
-  Widget _buildHistoryTab() {
+Widget _buildHistoryTab() {
     final history = [
       {
         'date': '20 Фев 2026, 08:00',

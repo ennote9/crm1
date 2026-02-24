@@ -49,6 +49,31 @@ class SkladApp extends StatelessWidget {
                               darkCard = const Color(0xFF44475A);
                               darkSurface = const Color(0xFF6272A4);
                             }
+                            if (darkStyle == 'Graphite Dark') {
+                              darkBg = const Color(0xFF181A1F);
+                              darkCard = const Color(0xFF21252B);
+                              darkSurface = const Color(0xFF2C313A);
+                            }
+                            if (darkStyle == 'Nord Dark') {
+                              darkBg = const Color(0xFF2E3440);
+                              darkCard = const Color(0xFF3B4252);
+                              darkSurface = const Color(0xFF434C5E);
+                            }
+                            if (darkStyle == 'Deep Space') {
+                              darkBg = const Color(0xFF050816);
+                              darkCard = const Color(0xFF0B1020);
+                              darkSurface = const Color(0xFF141A2A);
+                            }
+                            if (darkStyle == 'Forest Night') {
+                              darkBg = const Color(0xFF0B1F16);
+                              darkCard = const Color(0xFF123526);
+                              darkSurface = const Color(0xFF184133);
+                            }
+                            if (darkStyle == 'Solarized Dark') {
+                              darkBg = const Color(0xFF002B36);
+                              darkCard = const Color(0xFF073642);
+                              darkSurface = const Color(0xFF09424F);
+                            }
 
                             Color lightBg = const Color(0xFFFAFAFA);
                             Color lightCard = Colors.white;
@@ -72,6 +97,31 @@ class SkladApp extends StatelessWidget {
                               lightBg = const Color(0xFFECEFF1);
                               lightCard = Colors.white;
                               lightSurface = const Color(0xFFCFD8DC);
+                            }
+                            if (lightStyle == 'Документ') {
+                              lightBg = const Color(0xFFF5F5F7);
+                              lightCard = Colors.white;
+                              lightSurface = const Color(0xFFE1E4EA);
+                            }
+                            if (lightStyle == 'Pastel') {
+                              lightBg = const Color(0xFFFDF7FB);
+                              lightCard = Colors.white;
+                              lightSurface = const Color(0xFFF4E9F7);
+                            }
+                            if (lightStyle == 'High Contrast Light') {
+                              lightBg = Colors.white;
+                              lightCard = Colors.white;
+                              lightSurface = const Color(0xFFE5E5E5);
+                            }
+                            if (lightStyle == 'Warm Gray') {
+                              lightBg = const Color(0xFFF4F1EC);
+                              lightCard = Colors.white;
+                              lightSurface = const Color(0xFFE5DED2);
+                            }
+                            if (lightStyle == 'Cool Gray') {
+                              lightBg = const Color(0xFFF3F6F9);
+                              lightCard = Colors.white;
+                              lightSurface = const Color(0xFFE0E6EF);
                             }
 
                             return MaterialApp(
