@@ -6,9 +6,7 @@ import '../ui/custom_colors.dart';
 import '../features/dashboard/dashboard_view.dart';
 import '../features/settings/settings_view.dart';
 import '../features/shifts/shifts_view.dart';
-import '../features/products/products_view.dart';
 import '../features/sku/sku_view.dart';
-import '../features/zones/zones_view.dart';
 import 'responsive_wrapper.dart';
 
 class MainLayout extends StatefulWidget {
@@ -24,8 +22,6 @@ class _MainLayoutState extends State<MainLayout> {
   final List<Widget> _screens = [
     const DashboardView(),
     const ShiftsView(),
-    const ZonesView(),
-    const ProductsView(),
     const SkusView(),
     const Center(child: Text('Аналитика (в разработке)')),
     const SettingsView(),
@@ -178,34 +174,20 @@ class _MainLayoutState extends State<MainLayout> {
                             ),
                             _buildNavItem(
                               2,
-                              Icons.layers_outlined,
-                              Icons.layers,
-                              'Зоны',
-                              isExpanded,
-                            ),
-                            _buildNavItem(
-                              3,
-                              Icons.inventory_2_outlined,
-                              Icons.inventory_2,
-                              'Товары',
-                              isExpanded,
-                            ),
-                            _buildNavItem(
-                              4,
                               Icons.category_outlined,
                               Icons.category,
                               'Номенклатура',
                               isExpanded,
                             ),
                             _buildNavItem(
-                              5,
+                              3,
                               Icons.insights_outlined,
                               Icons.insights,
                               'Аналитика',
                               isExpanded,
                             ),
                             _buildNavItem(
-                              6,
+                              4,
                               Icons.settings_outlined,
                               Icons.settings,
                               'Настройки',
@@ -239,7 +221,7 @@ class _MainLayoutState extends State<MainLayout> {
                           onSelected: (value) {
                             if (value == 'settings') {
                               setState(() {
-                                _selectedIndex = 6;
+                                _selectedIndex = 4;
                               });
                             }
                             if (value == 'logout') {
