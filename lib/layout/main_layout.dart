@@ -5,6 +5,7 @@ import '../ui/custom_colors.dart';
 import '../features/dashboard/dashboard_view.dart';
 import '../features/settings/settings_view.dart';
 import '../features/shifts/shifts_view.dart';
+import '../features/products/products_view.dart';
 import '../features/zones/zones_view.dart';
 import 'responsive_wrapper.dart';
 
@@ -22,6 +23,7 @@ class _MainLayoutState extends State<MainLayout> {
     const DashboardView(),
     const ShiftsView(),
     const ZonesView(),
+    const ProductsView(),
     const Center(child: Text('Аналитика (в разработке)')),
     const SettingsView(),
   ];
@@ -180,13 +182,20 @@ class _MainLayoutState extends State<MainLayout> {
                             ),
                             _buildNavItem(
                               3,
+                              Icons.inventory_2_outlined,
+                              Icons.inventory_2,
+                              'Товары',
+                              isExpanded,
+                            ),
+                            _buildNavItem(
+                              4,
                               Icons.insights_outlined,
                               Icons.insights,
                               'Аналитика',
                               isExpanded,
                             ),
                             _buildNavItem(
-                              4,
+                              5,
                               Icons.settings_outlined,
                               Icons.settings,
                               'Настройки',
@@ -220,7 +229,7 @@ class _MainLayoutState extends State<MainLayout> {
                           onSelected: (value) {
                             if (value == 'settings') {
                               setState(() {
-                                _selectedIndex = 4;
+                                _selectedIndex = 5;
                               });
                             }
                             if (value == 'logout') {

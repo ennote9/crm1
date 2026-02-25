@@ -1,61 +1,15 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 
+import '../../core/grid_models.dart';
 import '../../layout/responsive_wrapper.dart';
 import '../../ui/custom_colors.dart';
+import '../../widgets/erp_data_grid.dart';
+import '../../widgets/erp_list_filter_row.dart';
+import '../../widgets/erp_list_toolbar.dart';
+import '../../widgets/view_settings_dialog.dart';
 
-class ColumnConfig {
-  String key;
-  String title;
-  bool isVisible;
-  double width;
-
-  ColumnConfig({
-    required this.key,
-    required this.title,
-    this.isVisible = true,
-    this.width = 150,
-  });
-  ColumnConfig clone() =>
-      ColumnConfig(key: key, title: title, isVisible: isVisible, width: width);
-}
-
-class FilterCondition {
-  String field;
-  String operator;
-  String value;
-
-  FilterCondition({
-    this.field = 'name',
-    this.operator = 'Содержит',
-    this.value = '',
-  });
-  FilterCondition clone() =>
-      FilterCondition(field: field, operator: operator, value: value);
-}
-
-class ViewPreset {
-  String name;
-  List<ColumnConfig> columns;
-  List<FilterCondition> filters;
-  final bool isStandard;
-
-  ViewPreset({
-    required this.name,
-    required this.columns,
-    required this.filters,
-    this.isStandard = false,
-  });
-  ViewPreset clone() => ViewPreset(
-    name: name,
-    columns: columns.map((c) => c.clone()).toList(),
-    filters: filters.map((f) => f.clone()).toList(),
-    isStandard: isStandard,
-  );
-}
-
-// Заводские колонки (Разделены Телефон и Тип найма)
+// Заводские колонки для экрана Команда (разделены Телефон и Тип найма)
 final List<ColumnConfig> defaultColumns = [
   ColumnConfig(key: 'name', title: 'Сотрудник', width: 240),
   ColumnConfig(key: 'phone', title: 'Телефон', width: 160),
@@ -94,24 +48,6 @@ final List<ColumnConfig> defaultColumns = [
   ColumnConfig(key: 'locker', title: 'Шкафчик', isVisible: false, width: 100),
   ColumnConfig(key: 'tsdPin', title: 'ПИН ТСД', isVisible: false, width: 100),
 ];
-
-// Состояние текущего списка
-final ValueNotifier<List<ColumnConfig>> globalColumns = ValueNotifier(
-  defaultColumns.map((c) => c.clone()).toList(),
-);
-final ValueNotifier<List<FilterCondition>> globalFilters = ValueNotifier([]);
-final ValueNotifier<String> currentViewName = ValueNotifier('Стандартный вид');
-final ValueNotifier<bool> isViewModified = ValueNotifier(false);
-
-// Сохраненные пресеты
-final ValueNotifier<List<ViewPreset>> globalPresets = ValueNotifier([
-  ViewPreset(
-    name: 'Стандартный вид',
-    columns: defaultColumns.map((c) => c.clone()).toList(),
-    filters: [],
-    isStandard: true,
-  ),
-]);
 
 // ============================================================================
 // ВСПОМОГАТЕЛЬНЫЕ ДАННЫЕ И ЦВЕТА
@@ -490,736 +426,9 @@ class _AbsenceDialogState extends State<AbsenceDialog> {
 }
 
 // ============================================================================
-// ЕДИНЫЙ ЦЕНТР НАСТРОЕК ВИДА И ФИЛЬТРОВ (ПАТТЕРН ERP)
+// ЭКРАН СМЕН (ДАТАГРИД СО СКРОЛЛОМ) — ViewSettingsDialog в widgets/view_settings_dialog.dart
 // ============================================================================
-class ViewSettingsDialog extends StatefulWidget {
-  const ViewSettingsDialog({super.key});
-  @override
-  State<ViewSettingsDialog> createState() => _ViewSettingsDialogState();
-}
 
-class _ViewSettingsDialogState extends State<ViewSettingsDialog> {
-  late List<ColumnConfig> tempCols;
-  late List<FilterCondition> tempFilters;
-  late String currentPreset;
-  bool isModified = false;
-
-  @override
-  void initState() {
-    super.initState();
-    tempCols = globalColumns.value.map((c) => c.clone()).toList();
-    tempFilters = globalFilters.value.map((f) => f.clone()).toList();
-    currentPreset = currentViewName.value;
-    isModified = isViewModified.value;
-  }
-
-  void _applyPreset(ViewPreset preset) {
-    setState(() {
-      currentPreset = preset.name;
-      tempCols = preset.columns.map((c) => c.clone()).toList();
-      tempFilters = preset.filters.map((f) => f.clone()).toList();
-      isModified = false;
-    });
-  }
-
-  void _markAsModified() {
-    if (!isModified) {
-      setState(() {
-        isModified = true;
-      });
-    }
-  }
-
-  void _deletePreset(String name) {
-    if (name == 'Стандартный вид') return;
-    setState(() {
-      globalPresets.value = List.from(globalPresets.value)
-        ..removeWhere((p) => p.name == name);
-      _applyPreset(globalPresets.value.first);
-    });
-  }
-
-  void _renamePreset(String oldName) {
-    if (oldName == 'Стандартный вид') return;
-    final ctrl = TextEditingController(text: oldName);
-    showDialog(
-      context: context,
-      builder: (c) => AlertDialog(
-        backgroundColor: context.bg,
-        title: Text(
-          'Переименовать пресет',
-          style: TextStyle(color: context.textMain),
-        ),
-        content: TextField(
-          controller: ctrl,
-          style: TextStyle(color: context.textMain),
-          decoration: InputDecoration(
-            filled: true,
-            fillColor: context.card,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide.none,
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(c);
-            },
-            child: Text('Отмена', style: TextStyle(color: context.textMuted)),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              final newName = ctrl.text.trim();
-              if (newName.isNotEmpty &&
-                  !globalPresets.value.any((p) => p.name == newName)) {
-                final list = List<ViewPreset>.from(globalPresets.value);
-                final idx = list.indexWhere((p) => p.name == oldName);
-                if (idx != -1) {
-                  list[idx].name = newName;
-                  globalPresets.value = list;
-                  setState(() {
-                    currentPreset = newName;
-                  });
-                }
-                Navigator.pop(c);
-              }
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: context.primary),
-            child: const Text(
-              'Сохранить',
-              style: TextStyle(color: Colors.white),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _saveAsNewPreset() {
-    final ctrl = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (c) => AlertDialog(
-        backgroundColor: context.bg,
-        title: Text(
-          'Сохранить пресет',
-          style: TextStyle(
-            color: context.textMain,
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        content: TextField(
-          controller: ctrl,
-          style: TextStyle(color: context.textMain),
-          decoration: InputDecoration(
-            filled: true,
-            fillColor: context.card,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide.none,
-            ),
-            hintText: 'Мой новый вид',
-            hintStyle: TextStyle(color: context.textMuted),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(c);
-            },
-            child: Text('Отмена', style: TextStyle(color: context.textMuted)),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              final name = ctrl.text.trim();
-              if (name.isEmpty) {
-                return;
-              }
-
-              final existingIdx = globalPresets.value.indexWhere(
-                (p) => p.name == name,
-              );
-              if (existingIdx != -1) {
-                if (globalPresets.value[existingIdx].isStandard) {
-                  return;
-                }
-                showDialog(
-                  context: context,
-                  builder: (c2) => AlertDialog(
-                    backgroundColor: context.bg,
-                    title: Text(
-                      'Перезаписать?',
-                      style: TextStyle(color: context.textMain),
-                    ),
-                    content: Text(
-                      'Пресет "$name" уже существует. Заменить его?',
-                      style: TextStyle(color: context.textMuted),
-                    ),
-                    actions: [
-                      TextButton(
-                        onPressed: () {
-                          Navigator.pop(c2);
-                        },
-                        child: Text(
-                          'Отмена',
-                          style: TextStyle(color: context.textMuted),
-                        ),
-                      ),
-                      ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: context.primary,
-                        ),
-                        onPressed: () {
-                          final newP = ViewPreset(
-                            name: name,
-                            columns: tempCols.map((x) => x.clone()).toList(),
-                            filters: tempFilters.map((x) => x.clone()).toList(),
-                          );
-                          final list = List<ViewPreset>.from(
-                            globalPresets.value,
-                          );
-                          list[existingIdx] = newP;
-                          globalPresets.value = list;
-                          currentViewName.value = name;
-                          isViewModified.value = false;
-                          Navigator.pop(c2);
-                          Navigator.pop(c);
-                          Navigator.pop(context);
-                        },
-                        child: const Text(
-                          'Да',
-                          style: TextStyle(color: Colors.white),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              } else {
-                final newP = ViewPreset(
-                  name: name,
-                  columns: tempCols.map((x) => x.clone()).toList(),
-                  filters: tempFilters.map((x) => x.clone()).toList(),
-                );
-                globalPresets.value = [...globalPresets.value, newP];
-                currentViewName.value = name;
-                isViewModified.value = false;
-                Navigator.pop(c);
-                Navigator.pop(context);
-              }
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: context.primary),
-            child: const Text(
-              'Сохранить',
-              style: TextStyle(color: Colors.white),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final activePresetObj = globalPresets.value.firstWhere(
-      (p) => p.name == currentPreset,
-      orElse: () => globalPresets.value.first,
-    );
-
-    return Dialog(
-      backgroundColor: context.bg,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-      clipBehavior: Clip.antiAlias,
-      child: ConstrainedBox(
-        // ИСПРАВЛЕНО: Увеличен размер окна настроек для комфорта
-        constraints: BoxConstraints(
-          maxWidth: 850,
-          maxHeight: MediaQuery.of(context).size.height * 0.9,
-        ),
-        child: DialogScrollWrapper(
-          minWidth: 700,
-          child: Padding(
-            padding: const EdgeInsets.all(32),
-            child: DefaultTabController(
-              length: 2,
-              child: Column(
-                mainAxisSize: MainAxisSize.max,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Настройка представления',
-                        style: TextStyle(
-                          color: context.textMain,
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      IconButton(
-                        icon: Icon(Icons.close, color: context.textMuted),
-                        onPressed: () {
-                          Navigator.pop(context);
-                        },
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: context.card,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: context.border),
-                    ),
-                    child: Row(
-                      children: [
-                        Text(
-                          'Активный пресет:',
-                          style: TextStyle(
-                            color: context.textMuted,
-                            fontSize: 13,
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Container(
-                            height: 48,
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
-                            decoration: BoxDecoration(
-                              color: context.surface,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: DropdownButtonHideUnderline(
-                              child: DropdownButton<String>(
-                                value: currentPreset,
-                                icon: Icon(
-                                  Icons.keyboard_arrow_down,
-                                  color: context.textMuted,
-                                  size: 16,
-                                ),
-                                dropdownColor: context.card,
-                                borderRadius: BorderRadius.circular(12),
-                                style: TextStyle(
-                                  color: isModified
-                                      ? context.orange
-                                      : context.textMain,
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                                isExpanded: true,
-                                items: globalPresets.value
-                                    .map(
-                                      (e) => DropdownMenuItem(
-                                        value: e.name,
-                                        child: Text(
-                                          e.name +
-                                              (isModified &&
-                                                      e.name == currentPreset
-                                                  ? ' *'
-                                                  : ''),
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ),
-                                    )
-                                    .toList(),
-                                onChanged: (v) {
-                                  if (v != null) {
-                                    final preset = globalPresets.value
-                                        .firstWhere((p) => p.name == v);
-                                    _applyPreset(preset);
-                                  }
-                                },
-                              ),
-                            ),
-                          ),
-                        ),
-                        // ИСПРАВЛЕНО: Управление пресетом (Компактные кнопки)
-                        if (!activePresetObj.isStandard && !isModified) ...[
-                          const SizedBox(width: 8),
-                          IconButton(
-                            icon: Icon(
-                              Icons.edit,
-                              color: context.textMuted,
-                              size: 20,
-                            ),
-                            onPressed: () => _renamePreset(currentPreset),
-                            tooltip: 'Переименовать',
-                          ),
-                          IconButton(
-                            icon: const Icon(
-                              Icons.delete_outline,
-                              color: Colors.redAccent,
-                              size: 20,
-                            ),
-                            onPressed: () => _deletePreset(currentPreset),
-                            tooltip: 'Удалить',
-                          ),
-                        ],
-                        const SizedBox(width: 16),
-                        ElevatedButton.icon(
-                          onPressed: isModified ? _saveAsNewPreset : null,
-                          icon: const Icon(Icons.save, size: 16),
-                          label: const Text('Сохранить'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: context.surface,
-                            foregroundColor: context.textMain,
-                            elevation: 0,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  TabBar(
-                    dividerColor: context.border,
-                    indicatorColor: context.primary,
-                    labelColor: context.primary,
-                    unselectedLabelColor: context.textMuted,
-                    tabAlignment: TabAlignment.start,
-                    isScrollable: true,
-                    tabs: const [
-                      Tab(
-                        icon: Icon(Icons.view_column_outlined),
-                        text: 'Структура колонок',
-                      ),
-                      Tab(
-                        icon: Icon(Icons.filter_alt_outlined),
-                        text: 'Условия фильтрации',
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-
-                  // ИСПРАВЛЕНО: Гибкая высота через Expanded вместо жестких 400px (решает проблему сжатия диалога)
-                  Expanded(
-                    child: TabBarView(
-                      children: [
-                        // ТАБ 1: КОЛОНКИ
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Включайте нужные колонки и меняйте их порядок перетаскиванием.',
-                              style: TextStyle(
-                                color: context.textMuted,
-                                fontSize: 13,
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-                            Expanded(
-                              child: ReorderableListView(
-                                buildDefaultDragHandles: false,
-                                onReorder: (oldIdx, newIdx) {
-                                  _markAsModified();
-                                  setState(() {
-                                    if (newIdx > oldIdx) {
-                                      newIdx -= 1;
-                                    }
-                                    final item = tempCols.removeAt(oldIdx);
-                                    tempCols.insert(newIdx, item);
-                                  });
-                                },
-                                children: tempCols
-                                    .map(
-                                      (c) => Container(
-                                        key: ValueKey(c.key),
-                                        margin: const EdgeInsets.only(
-                                          bottom: 8,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: context.card,
-                                          borderRadius: BorderRadius.circular(
-                                            12,
-                                          ),
-                                          border: Border.all(
-                                            color: context.border,
-                                          ),
-                                        ),
-                                        child: ListTile(
-                                          leading: ReorderableDragStartListener(
-                                            index: tempCols.indexOf(c),
-                                            child: Icon(
-                                              Icons.drag_indicator,
-                                              color: context.textMuted,
-                                              size: 20,
-                                            ),
-                                          ),
-                                          title: Text(
-                                            c.title,
-                                            style: TextStyle(
-                                              color: context.textMain,
-                                              fontSize: 14,
-                                            ),
-                                          ),
-                                          trailing: CupertinoSwitch(
-                                            value: c.isVisible,
-                                            activeTrackColor: context.primary,
-                                            onChanged: (v) {
-                                              _markAsModified();
-                                              setState(() {
-                                                c.isVisible = v;
-                                              });
-                                            },
-                                          ),
-                                        ),
-                                      ),
-                                    )
-                                    .toList(),
-                              ),
-                            ),
-                          ],
-                        ),
-
-                        // ТАБ 2: ФИЛЬТРЫ
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(
-                                  'Фильтрация записей в таблице. Можно добавить несколько условий.',
-                                  style: TextStyle(
-                                    color: context.textMuted,
-                                    fontSize: 13,
-                                  ),
-                                ),
-                                TextButton.icon(
-                                  onPressed: () {
-                                    _markAsModified();
-                                    setState(() {
-                                      tempFilters.add(FilterCondition());
-                                    });
-                                  },
-                                  icon: const Icon(Icons.add, size: 16),
-                                  label: const Text('Добавить условие'),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 16),
-                            if (tempFilters.isEmpty)
-                              Expanded(
-                                child: Center(
-                                  child: Text(
-                                    'Нет активных фильтров',
-                                    style: TextStyle(color: context.textMuted),
-                                  ),
-                                ),
-                              ),
-                            if (tempFilters.isNotEmpty)
-                              Expanded(
-                                child: ListView.builder(
-                                  itemCount: tempFilters.length,
-                                  itemBuilder: (context, idx) {
-                                    final f = tempFilters[idx];
-                                    return Padding(
-                                      padding: const EdgeInsets.only(
-                                        bottom: 12,
-                                      ),
-                                      child: Row(
-                                        children: [
-                                          Expanded(
-                                            child: _buildFilterDropdown(
-                                              f.field,
-                                              defaultColumns
-                                                  .map(
-                                                    (c) => DropdownMenuItem(
-                                                      value: c.key,
-                                                      child: Text(c.title),
-                                                    ),
-                                                  )
-                                                  .toList(),
-                                              (v) {
-                                                _markAsModified();
-                                                setState(() {
-                                                  f.field = v!;
-                                                });
-                                              },
-                                            ),
-                                          ),
-                                          const SizedBox(width: 8),
-                                          Expanded(
-                                            child: _buildFilterDropdown(
-                                              f.operator,
-                                              [
-                                                    'Равно',
-                                                    'Не равно',
-                                                    'Содержит',
-                                                    'Начинается с',
-                                                    'В списке',
-                                                  ]
-                                                  .map(
-                                                    (o) => DropdownMenuItem(
-                                                      value: o,
-                                                      child: Text(o),
-                                                    ),
-                                                  )
-                                                  .toList(),
-                                              (v) {
-                                                _markAsModified();
-                                                setState(() {
-                                                  f.operator = v!;
-                                                });
-                                              },
-                                            ),
-                                          ),
-                                          const SizedBox(width: 8),
-                                          Expanded(
-                                            flex: 2,
-                                            child: TextFormField(
-                                              key: ValueKey(
-                                                '${f.field}_${f.operator}',
-                                              ),
-                                              initialValue: f.value,
-                                              style: TextStyle(
-                                                color: context.textMain,
-                                                fontSize: 13,
-                                              ),
-                                              decoration: InputDecoration(
-                                                filled: true,
-                                                fillColor: context.card,
-                                                border: OutlineInputBorder(
-                                                  borderRadius:
-                                                      BorderRadius.circular(12),
-                                                  borderSide: BorderSide.none,
-                                                ),
-                                                hintText:
-                                                    f.operator == 'В списке'
-                                                    ? 'Например: В отпуске, Больничный'
-                                                    : 'Значение',
-                                                hintStyle: TextStyle(
-                                                  color: context.textMuted
-                                                      .withValues(alpha: 0.5),
-                                                ),
-                                                contentPadding:
-                                                    const EdgeInsets.symmetric(
-                                                      horizontal: 16,
-                                                    ),
-                                              ),
-                                              onChanged: (v) {
-                                                _markAsModified();
-                                                f.value = v;
-                                              },
-                                            ),
-                                          ),
-                                          IconButton(
-                                            icon: const Icon(
-                                              Icons.delete_outline,
-                                              color: Colors.redAccent,
-                                            ),
-                                            onPressed: () {
-                                              _markAsModified();
-                                              setState(() {
-                                                tempFilters.removeAt(idx);
-                                              });
-                                            },
-                                          ),
-                                        ],
-                                      ),
-                                    );
-                                  },
-                                ),
-                              ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      TextButton(
-                        onPressed: () {
-                          _applyPreset(activePresetObj);
-                        },
-                        child: const Text(
-                          'Сбросить изменения',
-                          style: TextStyle(color: Colors.redAccent),
-                        ),
-                      ),
-                      Row(
-                        children: [
-                          TextButton(
-                            onPressed: () {
-                              Navigator.pop(context);
-                            },
-                            child: Text(
-                              'Отмена',
-                              style: TextStyle(color: context.textMuted),
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          ElevatedButton(
-                            onPressed: () {
-                              currentViewName.value = currentPreset;
-                              isViewModified.value = isModified;
-                              globalColumns.value = List.from(tempCols);
-                              globalFilters.value = List.from(tempFilters);
-                              Navigator.pop(context);
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: context.primary,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 32,
-                                vertical: 16,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                            child: const Text('Применить вид'),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildFilterDropdown(
-    String val,
-    List<DropdownMenuItem<String>> items,
-    Function(String?) onChanged,
-  ) {
-    return Container(
-      height: 48,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: BoxDecoration(
-        color: context.card,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: val,
-          icon: Icon(Icons.keyboard_arrow_down, color: context.textMuted),
-          dropdownColor: context.card,
-          borderRadius: BorderRadius.circular(12),
-          elevation: 6,
-          style: TextStyle(color: context.textMain, fontSize: 13),
-          isExpanded: true,
-          items: items,
-          onChanged: onChanged,
-        ),
-      ),
-    );
-  }
-}
-
-// ============================================================================
-// ЭКРАН СМЕН (ДАТАГРИД СО СКРОЛЛОМ)
-// ============================================================================
 class ShiftsView extends StatefulWidget {
   const ShiftsView({super.key});
   @override
@@ -1236,7 +445,8 @@ class _ShiftsViewState extends State<ShiftsView> {
 
   final ScrollController _tableScrollController = ScrollController();
   final ScrollController _cardsScrollController = ScrollController();
-  final ScrollController _filtersScrollController = ScrollController();
+
+  late final GridState _gridState = GridState(defaultColumns: defaultColumns);
 
   final List<Map<String, dynamic>> employees = [
     {
@@ -1450,15 +660,15 @@ class _ShiftsViewState extends State<ShiftsView> {
 
   @override
   void dispose() {
+    _gridState.dispose();
     _searchCtrl.dispose();
     _tableScrollController.dispose();
     _cardsScrollController.dispose();
-    _filtersScrollController.dispose();
     super.dispose();
   }
 
   List<Map<String, dynamic>> get filteredEmployees {
-    return employees.where((emp) {
+    var list = employees.where((emp) {
       if (_searchQuery.isNotEmpty) {
         final q = _searchQuery.toLowerCase();
         if (!emp['name'].toString().toLowerCase().contains(q) &&
@@ -1481,7 +691,7 @@ class _ShiftsViewState extends State<ShiftsView> {
       }
 
       // ЛОГИКА ФИЛЬТРАЦИИ AXELOT
-      for (var f in globalFilters.value) {
+      for (var f in _gridState.filters.value) {
         if (f.value.isEmpty) {
           continue;
         }
@@ -1509,6 +719,25 @@ class _ShiftsViewState extends State<ShiftsView> {
       }
       return true;
     }).toList();
+
+    final sortCol = _gridState.sortColumn.value;
+    if (sortCol != null && sortCol.isNotEmpty) {
+      final asc = _gridState.isAscending.value;
+      list = List.from(list)
+        ..sort((a, b) {
+          final va = a[sortCol];
+          final vb = b[sortCol];
+          if (va is num && vb is num) {
+            final cmp = va.compareTo(vb);
+            return asc ? cmp : -cmp;
+          }
+          final sa = va?.toString().toLowerCase() ?? '';
+          final sb = vb?.toString().toLowerCase() ?? '';
+          final cmp = sa.compareTo(sb);
+          return asc ? cmp : -cmp;
+        });
+    }
+    return list;
   }
 
   void _clearFilters() {
@@ -1659,7 +888,7 @@ class _ShiftsViewState extends State<ShiftsView> {
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder<List<FilterCondition>>(
-      valueListenable: globalFilters,
+      valueListenable: _gridState.filters,
       builder: (context, _, child) {
         if (child != null) {}
         final currentList = filteredEmployees;
@@ -1675,103 +904,9 @@ class _ShiftsViewState extends State<ShiftsView> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: context.primary.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Icon(
-                          Icons.groups_outlined,
-                          color: context.primary,
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Text(
-                        'Команда компании',
-                        style: TextStyle(
-                          fontSize: 32,
-                          fontWeight: FontWeight.bold,
-                          color: context.textMain,
-                        ),
-                      ),
-                    ],
-                  ),
-                  Row(
-                    children: [
-                      ValueListenableBuilder<String>(
-                        valueListenable: currentViewName,
-                        builder: (context, viewName, _) {
-                          return ValueListenableBuilder<bool>(
-                            valueListenable: isViewModified,
-                            builder: (context, isMod, _) {
-                              return Container(
-                                margin: const EdgeInsets.only(right: 12),
-                                height: 44,
-                                child: OutlinedButton.icon(
-                                  icon: Icon(
-                                    Icons.tune,
-                                    size: 16,
-                                    color: context.textMain,
-                                  ),
-                                  label: Text(
-                                    viewName + (isMod ? '*' : ''),
-                                    style: TextStyle(
-                                      color: context.textMain,
-                                    ),
-                                  ),
-                                  onPressed: () => showDialog(
-                                    context: context,
-                                    builder: (c) =>
-                                        const ViewSettingsDialog(),
-                                  ).then((_) {
-                                    if (mounted) {
-                                      setState(() {});
-                                    }
-                                  }),
-                                  style: OutlinedButton.styleFrom(
-                                    side: BorderSide(
-                                      color: context.border,
-                                    ),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 14,
-                                    ),
-                                  ),
-                                ),
-                              );
-                            },
-                          );
-                        },
-                      ),
-                      SizedBox(
-                        height: 44,
-                        child: ElevatedButton.icon(
-                          onPressed: _showAddEmployeeModal,
-                          icon: const Icon(Icons.add),
-                          label: const Text('Добавить'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: context.primary,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 20,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+              ErpListToolbar(
+                title: 'Команда компании',
+                titleIcon: Icons.groups_outlined,
               ),
               const SizedBox(height: 24),
 
@@ -1842,369 +977,185 @@ class _ShiftsViewState extends State<ShiftsView> {
               ),
               const SizedBox(height: 24),
 
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: context.card,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: context.border),
-                ),
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    // ИСПРАВЛЕНО: Полоса фильтров тянется на всю длину.
-                    // Синхронизируем с минимальной шириной контента, чтобы не провоцировать лишний горизонтальный скролл.
-                    double minWidth = 1200;
-                    double w = constraints.maxWidth > minWidth
-                        ? constraints.maxWidth
-                        : minWidth;
-                    final behavior = ScrollConfiguration.of(
-                      context,
-                    ).copyWith(scrollbars: false);
-                    return ScrollConfiguration(
-                      behavior: behavior,
-                      child: SingleChildScrollView(
-                        controller: _filtersScrollController,
-                        scrollDirection: Axis.horizontal,
-                        physics: const NeverScrollableScrollPhysics(),
-                        child: SizedBox(
-                          width: w,
-                          child: Row(
-                            children: [
-                              Expanded(
-                                flex: 3,
-                                child: TextField(
-                                  controller: _searchCtrl,
-                                  onChanged: (val) {
-                                    setState(() {
-                                      _searchQuery = val;
-                                    });
-                                  },
-                                  style: TextStyle(
-                                    color: context.textMain,
-                                    fontSize: 13,
-                                  ),
-                                  decoration: InputDecoration(
-                                    hintText: 'Поиск (ФИО, телефон)',
-                                    hintStyle: TextStyle(
-                                      color: context.textMuted,
-                                      fontSize: 13,
-                                    ),
-                                    prefixIcon: Icon(
-                                      Icons.search,
-                                      color: context.textMuted,
-                                      size: 18,
-                                    ),
-                                    filled: true,
-                                    fillColor: context.bg,
-                                    border: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(10),
-                                      borderSide: BorderSide.none,
-                                    ),
-                                    contentPadding: const EdgeInsets.symmetric(
-                                      vertical: 0,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                flex: 2,
-                                child: _buildCompactFilter(
-                                  _filterZone,
-                                  [
-                                    'Все зоны',
-                                    ...globalZones.where(
-                                      (z) => z != 'Все зоны',
-                                    ),
-                                  ],
-                                  (v) {
-                                    setState(() {
-                                      _filterZone = v!;
-                                    });
-                                  },
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                flex: 2,
-                                child: _buildCompactFilter(
-                                  _filterRole,
-                                  ['Все должности', ...globalRoles],
-                                  (v) {
-                                    setState(() {
-                                      _filterRole = v!;
-                                    });
-                                  },
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                flex: 2,
-                                child: _buildCompactFilter(
-                                  _filterEmployment,
-                                  ['Все типы', ...globalEmploymentTypes],
-                                  (v) {
-                                    setState(() {
-                                      _filterEmployment = v!;
-                                    });
-                                  },
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                flex: 2,
-                                child: _buildCompactFilter(
-                                  _filterStatus,
-                                  ['Все', ...globalStatuses],
-                                  (v) {
-                                    setState(() {
-                                      _filterStatus = v!;
-                                    });
-                                  },
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              IconButton(
-                                onPressed: _clearFilters,
-                                icon: Icon(
-                                  Icons.refresh,
-                                  color: context.textMuted,
-                                  size: 20,
-                                ),
-                                tooltip: 'Сбросить фильтры',
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-              const SizedBox(height: 24),
-
               Expanded(
                 child: ValueListenableBuilder<List<ColumnConfig>>(
-                  valueListenable: globalColumns,
+                  valueListenable: _gridState.columns,
                   builder: (context, cols, _) {
-                    final visibleCols = cols.where((c) => c.isVisible).toList();
-
+                    final visibleCols =
+                        cols.where((c) => c.isVisible).toList();
+                    final tableWidth =
+                        ErpDataGrid.tableWidthForColumns(visibleCols);
                     return LayoutBuilder(
                       builder: (context, constraints) {
-                        double totalWidth = visibleCols.fold(
-                              0.0,
-                              (sum, col) => sum + col.width,
-                            ) +
-                            120;
-                        double tableWidth = totalWidth > constraints.maxWidth
-                            ? totalWidth
+                        final contentWidth = tableWidth > constraints.maxWidth
+                            ? tableWidth
                             : constraints.maxWidth;
-
                         return SingleChildScrollView(
                           controller: _tableScrollController,
                           scrollDirection: Axis.horizontal,
-                          child: ConstrainedBox(
-                            constraints: BoxConstraints(
-                              minWidth: constraints.maxWidth,
-                            ),
-                            child: SizedBox(
-                              width: tableWidth,
-                              child: Column(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 24,
-                                      vertical: 16,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: context.card,
-                                      borderRadius: const BorderRadius.only(
-                                        topLeft: Radius.circular(16),
-                                        topRight: Radius.circular(16),
-                                      ),
-                                    ),
-                                    child: Row(
-                                      children: [
-                                        ...visibleCols.map(
-                                          (c) => SizedBox(
-                                            width: c.width,
-                                            child: Text(
-                                              c.title.toUpperCase(),
-                                              style: TextStyle(
-                                                color: context.textMuted,
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 12,
-                                              ),
+                          child: SizedBox(
+                            width: contentWidth,
+                            height: constraints.maxHeight,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                ValueListenableBuilder<String>(
+                                  valueListenable: _gridState.currentViewName,
+                                  builder: (context, viewName, _) {
+                                    return ValueListenableBuilder<bool>(
+                                      valueListenable: _gridState.isViewModified,
+                                      builder: (context, isMod, _) {
+                                        return ErpListFilterRow(
+                                          searchController: _searchCtrl,
+                                          onSearchChanged: (val) {
+                                            setState(() {
+                                              _searchQuery = val;
+                                            });
+                                          },
+                                          quickFilters: [
+                                            _buildCompactFilter(
+                                              _filterZone,
+                                              [
+                                                'Все зоны',
+                                                ...globalZones.where(
+                                                  (z) => z != 'Все зоны',
+                                                ),
+                                              ],
+                                              (v) {
+                                                setState(() {
+                                                  _filterZone = v!;
+                                                });
+                                              },
                                             ),
-                                          ),
+                                            _buildCompactFilter(
+                                              _filterRole,
+                                              ['Все должности', ...globalRoles],
+                                              (v) {
+                                                setState(() {
+                                                  _filterRole = v!;
+                                                });
+                                              },
+                                            ),
+                                            _buildCompactFilter(
+                                              _filterEmployment,
+                                              ['Все типы', ...globalEmploymentTypes],
+                                              (v) {
+                                                setState(() {
+                                                  _filterEmployment = v!;
+                                                });
+                                              },
+                                            ),
+                                            _buildCompactFilter(
+                                              _filterStatus,
+                                              ['Все', ...globalStatuses],
+                                              (v) {
+                                                setState(() {
+                                                  _filterStatus = v!;
+                                                });
+                                              },
+                                            ),
+                                          ],
+                                          onClearFilters: _clearFilters,
+                                          onAddPressed: _showAddEmployeeModal,
+                                          rowWidth: contentWidth,
+                                          onSettingsPressed: () {
+                                            showDialog(
+                                              context: context,
+                                              builder: (c) => ViewSettingsDialog(
+                                                  gridState: _gridState),
+                                            ).then((_) {
+                                              if (mounted) {
+                                                setState(() {});
+                                              }
+                                            });
+                                          },
+                                          viewName: viewName,
+                                          isViewModified: isMod,
+                                        );
+                                      },
+                                    );
+                                  },
+                                ),
+                                const SizedBox(height: 24),
+                                Expanded(
+                                  child: ErpDataGrid(
+                                    items: currentList,
+                                    columns: visibleCols,
+                                    cellBuilder: (context, item, col, index) =>
+                                        _buildEmployeeCell(context, item, col, index),
+                                    onRowTap: (item, index) {
+                                      final originalIndex = employees.indexOf(item);
+                                      _showEmployeeProfile(originalIndex, item);
+                                    },
+                                    horizontalScrollController: _tableScrollController,
+                                    menuBuilder: (item) => [
+                                      PopupMenuItem(
+                                        value: 'profile',
+                                        child: Row(
+                                          children: [
+                                            Icon(
+                                              Icons.person,
+                                              color: context.textMain,
+                                              size: 20,
+                                            ),
+                                            const SizedBox(width: 12),
+                                            Text(
+                                              'Профиль',
+                                              style: TextStyle(color: context.textMain),
+                                            ),
+                                          ],
                                         ),
-                                        const Spacer(),
-                                        const SizedBox(width: 32),
-                                      ],
-                                    ),
-                                  ),
-                                  Expanded(
-                                    child: Container(
-                                      decoration: BoxDecoration(
-                                        color: context.surface,
-                                        borderRadius: const BorderRadius.only(
-                                          bottomLeft: Radius.circular(16),
-                                          bottomRight: Radius.circular(16),
+                                      ),
+                                      PopupMenuItem(
+                                        value: 'edit',
+                                        child: Row(
+                                          children: [
+                                            Icon(
+                                              Icons.edit,
+                                              color: context.textMain,
+                                              size: 20,
+                                            ),
+                                            const SizedBox(width: 12),
+                                            Text(
+                                              'Редактировать',
+                                              style: TextStyle(color: context.textMain),
+                                            ),
+                                          ],
                                         ),
                                       ),
-                                      child: ListView.separated(
-                                        itemCount: currentList.length,
-                                        separatorBuilder: (context, index) =>
-                                            Divider(
-                                              color: context.border,
-                                              height: 1,
+                                      const PopupMenuItem(
+                                        value: 'archive',
+                                        child: Row(
+                                          children: [
+                                            Icon(
+                                              Icons.archive,
+                                              color: Colors.redAccent,
+                                              size: 20,
                                             ),
-                                        itemBuilder: (context, index) {
-                                          final emp = currentList[index];
-                                          final originalIndex =
-                                              employees.indexOf(emp);
-
-                                          return InkWell(
-                                            onTap: () {
-                                              _showEmployeeProfile(
-                                                originalIndex,
-                                                emp,
-                                              );
-                                            },
-                                            hoverColor: context.hover,
-                                            child: Padding(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                horizontal: 24,
-                                                vertical: 16,
-                                              ),
-                                              child: Row(
-                                                children: [
-                                                  ...visibleCols.map(
-                                                    (c) => SizedBox(
-                                                      width: c.width,
-                                                      child: _buildCell(
-                                                        c,
-                                                        emp,
-                                                        originalIndex,
-                                                      ),
-                                                    ),
-                                                  ),
-                                                  const Spacer(),
-                                                  PopupMenuButton<String>(
-                                                    icon: Icon(
-                                                      Icons.more_vert,
-                                                      color: context.textMuted,
-                                                    ),
-                                                    color: context.hover,
-                                                    shape:
-                                                        RoundedRectangleBorder(
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                        12,
-                                                      ),
-                                                    ),
-                                                    onSelected: (value) {
-                                                      if (value == 'profile') {
-                                                        _showEmployeeProfile(
-                                                          originalIndex,
-                                                          emp,
-                                                        );
-                                                      }
-                                                      if (value == 'edit') {
-                                                        _showEditEmployeeModal(
-                                                          originalIndex,
-                                                          emp,
-                                                        );
-                                                      }
-                                                      if (value == 'archive') {
-                                                        _archiveEmployee(
-                                                          originalIndex,
-                                                        );
-                                                      }
-                                                    },
-                                                    itemBuilder: (context) => [
-                                                      PopupMenuItem(
-                                                        value: 'profile',
-                                                        child: Row(
-                                                          children: [
-                                                            Icon(
-                                                              Icons.person,
-                                                              color: context
-                                                                  .textMain,
-                                                              size: 20,
-                                                            ),
-                                                            const SizedBox(
-                                                              width: 12,
-                                                            ),
-                                                            Text(
-                                                              'Профиль',
-                                                              style: TextStyle(
-                                                                color: context
-                                                                    .textMain,
-                                                              ),
-                                                            ),
-                                                          ],
-                                                        ),
-                                                      ),
-                                                      PopupMenuItem(
-                                                        value: 'edit',
-                                                        child: Row(
-                                                          children: [
-                                                            Icon(
-                                                              Icons.edit,
-                                                              color: context
-                                                                  .textMain,
-                                                              size: 20,
-                                                            ),
-                                                            const SizedBox(
-                                                              width: 12,
-                                                            ),
-                                                            Text(
-                                                              'Редактировать',
-                                                              style: TextStyle(
-                                                                color: context
-                                                                    .textMain,
-                                                              ),
-                                                            ),
-                                                          ],
-                                                        ),
-                                                      ),
-                                                      const PopupMenuItem(
-                                                        value: 'archive',
-                                                        child: Row(
-                                                          children: [
-                                                            Icon(
-                                                              Icons.archive,
-                                                              color: Colors
-                                                                  .redAccent,
-                                                              size: 20,
-                                                            ),
-                                                            SizedBox(
-                                                              width: 12,
-                                                            ),
-                                                            Text(
-                                                              'В архив',
-                                                              style: TextStyle(
-                                                                color: Colors
-                                                                    .redAccent,
-                                                              ),
-                                                            ),
-                                                          ],
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                ],
-                                              ),
+                                            SizedBox(width: 12),
+                                            Text(
+                                              'В архив',
+                                              style: TextStyle(color: Colors.redAccent),
                                             ),
-                                          );
-                                        },
+                                          ],
+                                        ),
                                       ),
-                                    ),
+                                    ],
+                                    onMenuSelect: (value, item, index) {
+                                      final originalIndex = employees.indexOf(item);
+                                      if (value == 'profile') {
+                                        _showEmployeeProfile(originalIndex, item);
+                                      }
+                                      if (value == 'edit') {
+                                        _showEditEmployeeModal(originalIndex, item);
+                                      }
+                                      if (value == 'archive') {
+                                        _archiveEmployee(originalIndex);
+                                      }
+                                    },
                                   ),
-                                ],
-                              ),
+                                ),
+                              ],
                             ),
                           ),
                         );
@@ -2220,22 +1171,24 @@ class _ShiftsViewState extends State<ShiftsView> {
     );
   }
 
-  Widget _buildCell(
+  Widget _buildEmployeeCell(
+    BuildContext context,
+    Map<String, dynamic> item,
     ColumnConfig c,
-    Map<String, dynamic> emp,
-    int originalIndex,
+    int index,
   ) {
-    final isArchived = emp['status'] == 'В архиве';
+    final originalIndex = employees.indexOf(item);
+    final isArchived = item['status'] == 'В архиве';
 
     if (c.key == 'name') {
       return Row(
         children: [
           CircleAvatar(
             backgroundColor: context.border,
-            child: emp['hasAvatar'] == true
+            child: item['hasAvatar'] == true
                 ? const Icon(Icons.person, color: Colors.white70)
                 : Text(
-                    emp['name'][0],
+                    item['name'][0],
                     style: TextStyle(
                       color: context.textMain,
                       fontWeight: FontWeight.bold,
@@ -2245,7 +1198,7 @@ class _ShiftsViewState extends State<ShiftsView> {
           const SizedBox(width: 16),
           Expanded(
             child: Text(
-              emp['name'],
+              item['name'],
               style: TextStyle(
                 color: isArchived ? context.textMuted : context.textMain,
                 fontSize: 15,
@@ -2257,83 +1210,83 @@ class _ShiftsViewState extends State<ShiftsView> {
         ],
       );
     }
-    // ИСПРАВЛЕНО: Телефон вынесен в отдельную колонку
-    else if (c.key == 'phone') {
+    if (c.key == 'phone') {
       return Align(
         alignment: Alignment.centerLeft,
         child: Text(
-          emp['phone'] ?? 'Нет',
+          item['phone'] ?? 'Нет',
           style: TextStyle(color: context.textMuted, fontSize: 14),
           overflow: TextOverflow.ellipsis,
         ),
       );
     }
-    // ИСПРАВЛЕНО: Тип найма вынесен в отдельную колонку
-    else if (c.key == 'employment') {
+    if (c.key == 'employment') {
       return Align(
         alignment: Alignment.centerLeft,
         child: Text(
-          emp['employment'] ?? 'Не указан',
+          item['employment'] ?? 'Не указан',
           style: TextStyle(color: context.textMuted, fontSize: 14),
           overflow: TextOverflow.ellipsis,
         ),
       );
-    } else if (c.key == 'role') {
+    }
+    if (c.key == 'role') {
       return Align(
         alignment: Alignment.centerLeft,
         child: Text(
-          emp['role'],
+          item['role'],
           style: TextStyle(
             color: isArchived ? context.textMuted : context.textMain,
           ),
           overflow: TextOverflow.ellipsis,
         ),
       );
-    } else if (c.key == 'zone') {
+    }
+    if (c.key == 'zone') {
       if (isArchived) {
         return Text(
-          emp['zone'],
+          item['zone'],
           style: TextStyle(color: context.textMuted),
           overflow: TextOverflow.ellipsis,
         );
-      } else {
-        return Align(
-          alignment: Alignment.centerLeft,
-          child: Container(
-            padding: const EdgeInsets.only(right: 8),
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<String>(
-                value: emp['zone'],
-                icon: Icon(
-                  Icons.keyboard_arrow_down,
-                  color: context.textMuted,
-                  size: 16,
-                ),
-                style: TextStyle(color: context.textMain, fontSize: 13),
-                dropdownColor: context.card,
-                borderRadius: BorderRadius.circular(12),
-                elevation: 6,
-                isDense: true,
-                onChanged: (newZone) {
-                  setState(() {
-                    employees[originalIndex]['zone'] = newZone!;
-                  });
-                },
-                items: globalZones
-                    .map(
-                      (z) => DropdownMenuItem(
-                        value: z,
-                        child: Text(z, overflow: TextOverflow.ellipsis),
-                      ),
-                    )
-                    .toList(),
+      }
+      return Align(
+        alignment: Alignment.centerLeft,
+        child: Container(
+          padding: const EdgeInsets.only(right: 8),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: item['zone'],
+              icon: Icon(
+                Icons.keyboard_arrow_down,
+                color: context.textMuted,
+                size: 16,
               ),
+              style: TextStyle(color: context.textMain, fontSize: 13),
+              dropdownColor: context.card,
+              borderRadius: BorderRadius.circular(12),
+              elevation: 6,
+              isDense: true,
+              onChanged: (newZone) {
+                setState(() {
+                  employees[originalIndex]['zone'] = newZone!;
+                });
+              },
+              items: globalZones
+                  .map(
+                    (z) => DropdownMenuItem(
+                      value: z,
+                      child: Text(z, overflow: TextOverflow.ellipsis),
+                    ),
+                  )
+                  .toList(),
             ),
           ),
-        );
-      }
-    } else if (c.key == 'status') {
-      final statusColor = getStatusColor(context, emp['status']);
+        ),
+      );
+    }
+    if (c.key == 'status') {
+      final statusColor = getStatusColor(context, item['status']);
       return Align(
         alignment: Alignment.centerLeft,
         child: Container(
@@ -2344,7 +1297,7 @@ class _ShiftsViewState extends State<ShiftsView> {
           ),
           child: DropdownButtonHideUnderline(
             child: DropdownButton<String>(
-              value: emp['status'],
+              value: item['status'],
               icon: Icon(
                 Icons.keyboard_arrow_down,
                 color: statusColor,
@@ -2399,7 +1352,7 @@ class _ShiftsViewState extends State<ShiftsView> {
     return Align(
       alignment: Alignment.centerLeft,
       child: Text(
-        emp[c.key]?.toString() ?? '-',
+        item[c.key]?.toString() ?? '-',
         style: TextStyle(
           color: isArchived ? context.textMuted : context.textMain,
           fontSize: 13,
