@@ -9,6 +9,19 @@ final ValueNotifier<Color> globalPrimaryColor = ValueNotifier(
 final ValueNotifier<double> globalTextScale = ValueNotifier(1.0);
 final ValueNotifier<String> globalFontFamily = ValueNotifier('-apple-system');
 
+/// Один listenable для всех настроек темы — один ListenableBuilder в app.dart.
+Listenable get themeListenable => Listenable.merge([
+  globalThemeMode,
+  globalDarkStyle,
+  globalLightStyle,
+  globalPrimaryColor,
+  globalTextScale,
+  globalFontFamily,
+]);
+
+/// Отображаемое имя текущего пользователя (из настроек/авторизации).
+final ValueNotifier<String> globalUserName = ValueNotifier('Iuldashev S.');
+
 /// Глобальный статус текущего пользователя (Активен, В отпуске, Больничный и т.п.).
 /// Сейчас используется в боковом меню; в будущем может синхронизироваться с HR/учетной записью.
 final ValueNotifier<String> globalUserStatus = ValueNotifier('Активен');

@@ -120,7 +120,7 @@ class _ViewSettingsDialogState extends State<ViewSettingsDialog> {
           ),
         ],
       ),
-    );
+    ).then((_) => ctrl.dispose());
   }
 
   void _saveAsNewPreset() {
@@ -160,13 +160,13 @@ class _ViewSettingsDialogState extends State<ViewSettingsDialog> {
           ),
           ElevatedButton(
             onPressed: () {
-              final name = ctrl.text.trim();
-              if (name.isEmpty) {
+              final presetName = ctrl.text.trim();
+              if (presetName.isEmpty) {
                 return;
               }
 
               final existingIdx =
-                  gridState.presets.value.indexWhere((p) => p.name == name);
+                  gridState.presets.value.indexWhere((p) => p.name == presetName);
               if (existingIdx != -1) {
                 if (gridState.presets.value[existingIdx].isStandard) {
                   return;
@@ -180,7 +180,7 @@ class _ViewSettingsDialogState extends State<ViewSettingsDialog> {
                       style: TextStyle(color: context.textMain),
                     ),
                     content: Text(
-                      'Пресет "$name" уже существует. Заменить его?',
+                      'Пресет "$presetName" уже существует. Заменить его?',
                       style: TextStyle(color: context.textMuted),
                     ),
                     actions: [
@@ -199,7 +199,7 @@ class _ViewSettingsDialogState extends State<ViewSettingsDialog> {
                         ),
                         onPressed: () {
                           final newP = ViewPreset(
-                            name: name,
+                            name: presetName,
                             columns: tempCols.map((x) => x.clone()).toList(),
                             filters:
                                 tempFilters.map((x) => x.clone()).toList(),
@@ -210,7 +210,7 @@ class _ViewSettingsDialogState extends State<ViewSettingsDialog> {
                               List<ViewPreset>.from(gridState.presets.value);
                           list[existingIdx] = newP;
                           gridState.presets.value = list;
-                          gridState.currentViewName.value = name;
+                          gridState.currentViewName.value = presetName;
                           gridState.isViewModified.value = false;
                           Navigator.pop(c2);
                           Navigator.pop(c);
@@ -226,7 +226,7 @@ class _ViewSettingsDialogState extends State<ViewSettingsDialog> {
                 );
               } else {
                 final newP = ViewPreset(
-                  name: name,
+                  name: presetName,
                   columns: tempCols.map((x) => x.clone()).toList(),
                   filters: tempFilters.map((x) => x.clone()).toList(),
                   sortColumn: tempSortColumn,
@@ -236,7 +236,7 @@ class _ViewSettingsDialogState extends State<ViewSettingsDialog> {
                   ...gridState.presets.value,
                   newP,
                 ];
-                gridState.currentViewName.value = name;
+                gridState.currentViewName.value = presetName;
                 gridState.isViewModified.value = false;
                 Navigator.pop(c);
                 Navigator.pop(context);
@@ -250,7 +250,7 @@ class _ViewSettingsDialogState extends State<ViewSettingsDialog> {
           ),
         ],
       ),
-    );
+    ).then((_) => ctrl.dispose());
   }
 
   @override

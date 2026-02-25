@@ -91,7 +91,7 @@ class ZonesView extends StatelessWidget {
         decoration: BoxDecoration(
           color: context.surface,
           borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: context.border, width: 1),
+          border: Border.all(color: context.border),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -99,12 +99,16 @@ class ZonesView extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  zone['name'],
-                  style: TextStyle(
-                    color: context.textMain,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
+                Expanded(
+                  child: Text(
+                    zone['name'] as String,
+                    style: TextStyle(
+                      color: context.textMain,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
                   ),
                 ),
                 Icon(Icons.inventory_2_outlined, color: context.textMuted),

@@ -1,432 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../core/formatters.dart';
 import '../../core/grid_models.dart';
+import '../../core/status_utils.dart';
 import '../../layout/responsive_wrapper.dart';
 import '../../ui/custom_colors.dart';
 import '../../widgets/erp_data_grid.dart';
 import '../../widgets/erp_list_filter_row.dart';
 import '../../widgets/erp_list_toolbar.dart';
+import '../../widgets/erp_popup_menu_item.dart';
 import '../../widgets/view_settings_dialog.dart';
-
-// Заводские колонки для экрана Команда (разделены Телефон и Тип найма)
-final List<ColumnConfig> defaultColumns = [
-  ColumnConfig(key: 'name', title: 'Сотрудник', width: 240),
-  ColumnConfig(key: 'phone', title: 'Телефон', width: 160),
-  ColumnConfig(key: 'role', title: 'Должность', width: 180),
-  ColumnConfig(key: 'employment', title: 'Тип найма', width: 140),
-  ColumnConfig(key: 'zone', title: 'Текущая зона', width: 160),
-  ColumnConfig(key: 'status', title: 'Статус', width: 160),
-  ColumnConfig(key: 'login', title: 'Логин', isVisible: false, width: 140),
-  ColumnConfig(key: 'email', title: 'Email', isVisible: false, width: 220),
-  ColumnConfig(
-    key: 'telegram',
-    title: 'Telegram',
-    isVisible: false,
-    width: 140,
-  ),
-  ColumnConfig(key: 'iin', title: 'ИИН', isVisible: false, width: 150),
-  ColumnConfig(key: 'contract', title: 'Договор', isVisible: false, width: 130),
-  ColumnConfig(
-    key: 'hireDate',
-    title: 'Дата приема',
-    isVisible: false,
-    width: 130,
-  ),
-  ColumnConfig(
-    key: 'clothes',
-    title: 'Размер одежды',
-    isVisible: false,
-    width: 140,
-  ),
-  ColumnConfig(
-    key: 'shoes',
-    title: 'Размер обуви',
-    isVisible: false,
-    width: 120,
-  ),
-  ColumnConfig(key: 'locker', title: 'Шкафчик', isVisible: false, width: 100),
-  ColumnConfig(key: 'tsdPin', title: 'ПИН ТСД', isVisible: false, width: 100),
-];
+import 'shifts_absence_dialog.dart';
+import 'shifts_constants.dart';
+import 'shifts_inventory_dialog.dart';
 
 // ============================================================================
-// ВСПОМОГАТЕЛЬНЫЕ ДАННЫЕ И ЦВЕТА
-// ============================================================================
-Color getStatusColor(BuildContext context, String status) {
-  bool isDark = Theme.of(context).brightness == Brightness.dark;
-  if (status == 'Активен') {
-    return isDark ? Colors.greenAccent : Colors.green.shade700;
-  }
-  if (status == 'В отпуске') {
-    return isDark ? Colors.orangeAccent : Colors.orange.shade800;
-  }
-  if (status == 'Больничный') {
-    return isDark ? Colors.redAccent : Colors.red.shade700;
-  }
-  if (status == 'Отсутствует') {
-    return isDark ? Colors.purpleAccent : Colors.purple.shade700;
-  }
-  if (status == 'В архиве') {
-    return Colors.grey;
-  }
-  return isDark ? Colors.white54 : Colors.black54;
-}
-
-final List<String> globalRoles = [
-  'Старший смены',
-  'Комплектовщик',
-  'Водитель погрузчика',
-  'Приемщик',
-];
-final List<String> globalZones = [
-  'Зона А (Сборка)',
-  'Зона Б (Паллеты)',
-  'Пандус 1',
-  'Холодильник',
-  'Все зоны',
-];
-final List<String> globalStatuses = [
-  'Активен',
-  'В отпуске',
-  'Больничный',
-  'Отсутствует',
-  'В архиве',
-];
-final List<String> clothesSizes = [
-  'S (44-46)',
-  'M (46-48)',
-  'L (48-50)',
-  'XL (50-52)',
-  'XXL (52-54)',
-];
-final List<String> shoeSizes = [
-  '35',
-  '36',
-  '37',
-  '38',
-  '39',
-  '40',
-  '41',
-  '42',
-  '43',
-  '44',
-  '45',
-  '46',
-  '47',
-];
-final List<String> globalEmploymentTypes = ['Штат', 'Аутстаффинг', 'ГПХ'];
-final List<String> globalRights = [
-  '1C Предприятие',
-  'ТСД Сканер (Сборка)',
-  'ТСД Сканер (Приемка)',
-  'Редактирование смен',
-  'Допуск в Холодильник',
-  'Вождение погрузчика',
-];
-final List<String> globalInventoryTypes = [
-  'Ноутбук / ПК',
-  'ТСД Сканер',
-  'Рация',
-  'Спецодежда',
-  'Ключи',
-  'Прочее',
-];
-
-String transliterate(String text) {
-  const cyrillic =
-      'АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюя';
-  const latin = [
-    'A',
-    'B',
-    'V',
-    'G',
-    'D',
-    'E',
-    'E',
-    'ZH',
-    'Z',
-    'I',
-    'Y',
-    'K',
-    'L',
-    'M',
-    'N',
-    'O',
-    'P',
-    'R',
-    'S',
-    'T',
-    'U',
-    'F',
-    'H',
-    'TS',
-    'CH',
-    'SH',
-    'SCH',
-    '',
-    'Y',
-    '',
-    'E',
-    'YU',
-    'YA',
-    'a',
-    'b',
-    'v',
-    'g',
-    'd',
-    'e',
-    'e',
-    'zh',
-    'z',
-    'i',
-    'y',
-    'k',
-    'l',
-    'm',
-    'n',
-    'o',
-    'p',
-    'r',
-    's',
-    't',
-    'u',
-    'f',
-    'h',
-    'ts',
-    'ch',
-    'sh',
-    'sch',
-    '',
-    'y',
-    '',
-    'e',
-    'yu',
-    'ya',
-  ];
-  String res = '';
-  for (int i = 0; i < text.length; i++) {
-    int index = cyrillic.indexOf(text[i]);
-    if (index >= 0) {
-      res += latin[index];
-    } else {
-      res += text[i];
-    }
-  }
-  return res;
-}
-
-class PhoneInputFormatter extends TextInputFormatter {
-  @override
-  TextEditingValue formatEditUpdate(
-    TextEditingValue oldValue,
-    TextEditingValue newValue,
-  ) {
-    final text = newValue.text.replaceAll(RegExp(r'\D'), '');
-    String formatted = '';
-    if (text.isNotEmpty) {
-      formatted = '+7 ';
-      if (text.length > 1) {
-        formatted +=
-            '(${text.substring(1, text.length >= 4 ? 4 : text.length)}';
-      }
-      if (text.length >= 4) {
-        formatted +=
-            ') ${text.substring(4, text.length >= 7 ? 7 : text.length)}';
-      }
-      if (text.length >= 7) {
-        formatted +=
-            '-${text.substring(7, text.length >= 9 ? 9 : text.length)}';
-      }
-      if (text.length >= 9) {
-        formatted +=
-            '-${text.substring(9, text.length >= 11 ? 11 : text.length)}';
-      }
-    }
-    return TextEditingValue(
-      text: formatted,
-      selection: TextSelection.collapsed(offset: formatted.length),
-    );
-  }
-}
-
-// ============================================================================
-// АБСОЛЮТНАЯ ЗАЩИТА ОТ OVERFLOW
-// ============================================================================
-
-class AbsenceDialog extends StatefulWidget {
-  const AbsenceDialog({super.key});
-  @override
-  State<AbsenceDialog> createState() => _AbsenceDialogState();
-}
-
-class _AbsenceDialogState extends State<AbsenceDialog> {
-  DateTime? _start;
-  DateTime? _end;
-
-  void _pickDate(bool isStart) async {
-    DateTime? picked = await showDatePicker(
-      context: context,
-      initialDate: DateTime.now(),
-      firstDate: DateTime.now().subtract(const Duration(days: 30)),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
-      builder: (context, child) => Theme(
-        data: Theme.of(context).copyWith(
-          colorScheme: ColorScheme.dark(
-            primary: context.primary,
-            onPrimary: Colors.white,
-            surface: context.card,
-            onSurface: context.textMain,
-          ),
-        ),
-        child: child!,
-      ),
-    );
-    if (picked != null) {
-      setState(() {
-        if (isStart) {
-          _start = picked;
-          if (_end != null && _end!.isBefore(_start!)) {
-            _end = null;
-          }
-        } else {
-          _end = picked;
-        }
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Dialog(
-      backgroundColor: context.bg,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      clipBehavior: Clip.antiAlias,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 400),
-        child: DialogScrollWrapper(
-          minWidth: 350,
-          child: Padding(
-            padding: const EdgeInsets.all(32),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Выбор периода',
-                  style: TextStyle(
-                    color: context.textMain,
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 24),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildDateBox('Начало', _start, () {
-                        _pickDate(true);
-                      }),
-                    ),
-                    const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 16),
-                      child: Icon(
-                        Icons.arrow_forward_rounded,
-                        color: Colors.white38,
-                      ),
-                    ),
-                    Expanded(
-                      child: _buildDateBox('Конец', _end, () {
-                        _pickDate(false);
-                      }),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 32),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    TextButton(
-                      onPressed: () {
-                        Navigator.pop(context);
-                      },
-                      child: Text(
-                        'Отмена',
-                        style: TextStyle(color: context.textMuted),
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    ElevatedButton(
-                      onPressed: (_start != null && _end != null)
-                          ? () {
-                              String format(DateTime d) =>
-                                  "${d.day.toString().padLeft(2, '0')}.${d.month.toString().padLeft(2, '0')}.${d.year}";
-                              Navigator.pop(
-                                context,
-                                "${format(_start!)} - ${format(_end!)}",
-                              );
-                            }
-                          : null,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: context.primary,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 24,
-                          vertical: 16,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: const Text('Сохранить'),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDateBox(String label, DateTime? date, VoidCallback onTap) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: context.card,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: context.border),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              label,
-              style: TextStyle(color: context.textMuted, fontSize: 12),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              date != null
-                  ? "${date.day.toString().padLeft(2, '0')}.${date.month.toString().padLeft(2, '0')}.${date.year}"
-                  : "Выберите",
-              style: TextStyle(
-                color: date != null ? context.textMain : context.textMuted,
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ============================================================================
-// ЭКРАН СМЕН (ДАТАГРИД СО СКРОЛЛОМ) — ViewSettingsDialog в widgets/view_settings_dialog.dart
+// ЭКРАН КОМАНДА (ДАТАГРИД, ФИЛЬТРЫ, ПРЕСЕТЫ) — ViewSettingsDialog в widgets/view_settings_dialog.dart
 // ============================================================================
 
 class ShiftsView extends StatefulWidget {
@@ -752,15 +342,23 @@ class _ShiftsViewState extends State<ShiftsView> {
   }
 
   void _showAddEmployeeModal() async {
-    final newEmployee = await showDialog<Map<String, dynamic>>(
-      context: context,
-      builder: (context) => const EmployeeFormDialog(),
-    );
-    if (!mounted) return;
-    if (newEmployee != null) {
-      setState(() {
-        employees.insert(0, newEmployee);
-      });
+    try {
+      final newEmployee = await showDialog<Map<String, dynamic>>(
+        context: context,
+        builder: (context) => const EmployeeFormDialog(),
+      );
+      if (!mounted) return;
+      if (newEmployee != null) {
+        setState(() {
+          employees.insert(0, newEmployee);
+        });
+      }
+    } catch (e, _) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ошибка при открытии формы: $e')),
+        );
+      }
     }
   }
 
@@ -769,17 +367,25 @@ class _ShiftsViewState extends State<ShiftsView> {
     Map<String, dynamic> emp, {
     bool reopenProfile = false,
   }) async {
-    final updatedEmployee = await showDialog<Map<String, dynamic>>(
-      context: context,
-      builder: (context) => EmployeeFormDialog(employeeToEdit: emp),
-    );
-    if (!mounted) return;
-    if (updatedEmployee != null) {
-      setState(() {
-        employees[index] = updatedEmployee;
-      });
-      if (reopenProfile) {
-        _showEmployeeProfile(index, employees[index]);
+    try {
+      final updatedEmployee = await showDialog<Map<String, dynamic>>(
+        context: context,
+        builder: (context) => EmployeeFormDialog(employeeToEdit: emp),
+      );
+      if (!mounted) return;
+      if (updatedEmployee != null) {
+        setState(() {
+          employees[index] = updatedEmployee;
+        });
+        if (reopenProfile) {
+          _showEmployeeProfile(index, employees[index]);
+        }
+      }
+    } catch (e, _) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ошибка при сохранении: $e')),
+        );
       }
     }
   }
@@ -1089,56 +695,24 @@ class _ShiftsViewState extends State<ShiftsView> {
                                     },
                                     horizontalScrollController: _tableScrollController,
                                     menuBuilder: (item) => [
-                                      PopupMenuItem(
+                                      erpPopupMenuItem(
+                                        context,
                                         value: 'profile',
-                                        child: Row(
-                                          children: [
-                                            Icon(
-                                              Icons.person,
-                                              color: context.textMain,
-                                              size: 20,
-                                            ),
-                                            const SizedBox(width: 12),
-                                            Text(
-                                              'Профиль',
-                                              style: TextStyle(color: context.textMain),
-                                            ),
-                                          ],
-                                        ),
+                                        icon: Icons.person,
+                                        label: 'Профиль',
                                       ),
-                                      PopupMenuItem(
+                                      erpPopupMenuItem(
+                                        context,
                                         value: 'edit',
-                                        child: Row(
-                                          children: [
-                                            Icon(
-                                              Icons.edit,
-                                              color: context.textMain,
-                                              size: 20,
-                                            ),
-                                            const SizedBox(width: 12),
-                                            Text(
-                                              'Редактировать',
-                                              style: TextStyle(color: context.textMain),
-                                            ),
-                                          ],
-                                        ),
+                                        icon: Icons.edit,
+                                        label: 'Редактировать',
                                       ),
-                                      const PopupMenuItem(
+                                      erpPopupMenuItem(
+                                        context,
                                         value: 'archive',
-                                        child: Row(
-                                          children: [
-                                            Icon(
-                                              Icons.archive,
-                                              color: Colors.redAccent,
-                                              size: 20,
-                                            ),
-                                            SizedBox(width: 12),
-                                            Text(
-                                              'В архив',
-                                              style: TextStyle(color: Colors.redAccent),
-                                            ),
-                                          ],
-                                        ),
+                                        icon: Icons.archive,
+                                        label: 'В архив',
+                                        isDestructive: true,
                                       ),
                                     ],
                                     onMenuSelect: (value, item, index) {
@@ -1500,43 +1074,60 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
   }
 
   Future<void> _pickAbsenceDateRange() async {
-    final period = await showDialog<String>(
-      context: context,
-      builder: (c) => const AbsenceDialog(),
-    );
-    if (period != null) {
-      setState(() {
-        _absencePeriod = period;
-      });
+    try {
+      final period = await showDialog<String>(
+        context: context,
+        builder: (c) => const AbsenceDialog(),
+      );
+      if (period != null && mounted) {
+        setState(() {
+          _absencePeriod = period;
+        });
+      }
+    } catch (e, _) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ошибка при выборе периода: $e')),
+        );
+      }
     }
   }
 
   void _pickDate() async {
-    DateTime? picked = await showDatePicker(
-      context: context,
-      initialDate: DateTime.now(),
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2100),
-      builder: (context, child) => Theme(
-        data: Theme.of(context).copyWith(
-          colorScheme: ColorScheme.dark(
-            primary: context.primary,
-            onPrimary: Colors.white,
-            surface: context.card,
-            onSurface: context.textMain,
+    try {
+      final picked = await showDatePicker(
+        context: context,
+        initialDate: DateTime.now(),
+        firstDate: DateTime(2000),
+        lastDate: DateTime(2100),
+        builder: (context, child) => Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: ColorScheme.dark(
+              primary: context.primary,
+              onPrimary: Colors.white,
+              surface: context.card,
+              onSurface: context.textMain,
+            ),
           ),
+          child: child!,
         ),
-        child: child!,
-      ),
-    );
-    if (picked != null) {
-      _hireDateCtrl.text =
-          "${picked.day.toString().padLeft(2, '0')}.${picked.month.toString().padLeft(2, '0')}.${picked.year}";
+      );
+      if (picked != null && mounted) {
+        _hireDateCtrl.text =
+            "${picked.day.toString().padLeft(2, '0')}.${picked.month.toString().padLeft(2, '0')}.${picked.year}";
+      }
+    } catch (e, _) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Не удалось выбрать дату: $e')),
+        );
+      }
     }
   }
 
   void _addLanguage() async {
-    final result = await showDialog<Map<String, String>>(
+    try {
+      final result = await showDialog<Map<String, String>>(
       context: context,
       builder: (context) {
         const availableLanguages = [
@@ -1777,7 +1368,7 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
       },
     );
 
-    if (result != null) {
+    if (result != null && mounted) {
       setState(() {
         // Если язык уже есть в списке, просто обновим уровни, а не будем дублировать строку.
         final existingIndex = _languages.indexWhere(
@@ -1792,6 +1383,13 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
           (a, b) => (a['name'] ?? '').compareTo(b['name'] ?? ''),
         );
       });
+    }
+    } catch (e, _) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ошибка при добавлении языка: $e')),
+        );
+      }
     }
   }
 
@@ -2588,291 +2186,46 @@ class _EmployeeProfileDialogState extends State<EmployeeProfileDialog> {
   }
 
   void _showInventoryDialog({Map<String, dynamic>? item, int? index}) async {
-    final result = await showDialog<Map<String, dynamic>>(
-      context: context,
-      builder: (context) {
-        final nameCtrl = TextEditingController(text: item?['name'] ?? '');
-        final detailsCtrl = TextEditingController(text: item?['details'] ?? '');
-        final purposeCtrl = TextEditingController(text: item?['purpose'] ?? '');
-        String condition = item?['condition'] ?? 'Новое';
-        String status = item?['status'] ?? 'Выдано';
-        String invType = item?['type'] ?? globalInventoryTypes[0];
-
-        return StatefulBuilder(
-          builder: (context, setStateSB) {
-            return AlertDialog(
-              backgroundColor: context.bg,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              title: Text(
-                item == null ? 'Выдать имущество' : 'Редактировать имущество',
-                style: TextStyle(
-                  color: context.textMain,
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: context.card,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          value: invType,
-                          icon: Icon(
-                            Icons.keyboard_arrow_down,
-                            color: context.textMuted,
-                          ),
-                          dropdownColor: context.card,
-                          borderRadius: BorderRadius.circular(12),
-                          elevation: 6,
-                          style: TextStyle(color: context.textMain),
-                          isExpanded: true,
-                          items: globalInventoryTypes
-                              .map(
-                                (c) => DropdownMenuItem(
-                                  value: c,
-                                  child: Row(
-                                    children: [
-                                      Icon(
-                                        _getInventoryIcon(c),
-                                        size: 18,
-                                        color: context.textMuted,
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Text(c),
-                                    ],
-                                  ),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (v) {
-                            setStateSB(() {
-                              invType = v!;
-                            });
-                          },
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: nameCtrl,
-                      style: TextStyle(color: context.textMain),
-                      decoration: InputDecoration(
-                        filled: true,
-                        fillColor: context.card,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
-                        ),
-                        hintText: 'Модель (напр. Honeywell)',
-                        hintStyle: TextStyle(
-                          color: context.textMuted.withValues(alpha: 0.5),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: detailsCtrl,
-                      style: TextStyle(color: context.textMain),
-                      decoration: InputDecoration(
-                        filled: true,
-                        fillColor: context.card,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
-                        ),
-                        hintText: 'Серийный или Инв. номер',
-                        hintStyle: TextStyle(
-                          color: context.textMuted.withValues(alpha: 0.5),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: purposeCtrl,
-                      style: TextStyle(color: context.textMain),
-                      decoration: InputDecoration(
-                        filled: true,
-                        fillColor: context.card,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
-                        ),
-                        hintText: 'Цель выдачи',
-                        hintStyle: TextStyle(
-                          color: context.textMuted.withValues(alpha: 0.5),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: context.card,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: DropdownButtonHideUnderline(
-                              child: DropdownButton<String>(
-                                value: condition,
-                                icon: Icon(
-                                  Icons.keyboard_arrow_down,
-                                  color: context.textMuted,
-                                ),
-                                dropdownColor: context.card,
-                                borderRadius: BorderRadius.circular(12),
-                                elevation: 6,
-                                style: TextStyle(color: context.textMain),
-                                isExpanded: true,
-                                items:
-                                    [
-                                          'Новое',
-                                          'Хорошее',
-                                          'Б/У',
-                                          'Требует ремонта',
-                                        ]
-                                        .map(
-                                          (c) => DropdownMenuItem(
-                                            value: c,
-                                            child: Text(c),
-                                          ),
-                                        )
-                                        .toList(),
-                                onChanged: (v) {
-                                  setStateSB(() {
-                                    condition = v!;
-                                  });
-                                },
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: context.card,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: DropdownButtonHideUnderline(
-                              child: DropdownButton<String>(
-                                value: status,
-                                icon: Icon(
-                                  Icons.keyboard_arrow_down,
-                                  color: context.textMuted,
-                                ),
-                                dropdownColor: context.card,
-                                borderRadius: BorderRadius.circular(12),
-                                elevation: 6,
-                                style: TextStyle(color: context.textMain),
-                                isExpanded: true,
-                                items: ['Выдано', 'Изъято', 'На ремонте']
-                                    .map(
-                                      (c) => DropdownMenuItem(
-                                        value: c,
-                                        child: Text(c),
-                                      ),
-                                    )
-                                    .toList(),
-                                onChanged: (v) {
-                                  setStateSB(() {
-                                    status = v!;
-                                  });
-                                },
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () {
-                    Navigator.pop(context);
-                  },
-                  child: Text(
-                    'Отмена',
-                    style: TextStyle(color: context.textMuted),
-                  ),
-                ),
-                ElevatedButton(
-                  onPressed: () {
-                    Navigator.pop(context, {
-                      'name': nameCtrl.text,
-                      'details': detailsCtrl.text,
-                      'purpose': purposeCtrl.text,
-                      'condition': condition,
-                      'status': status,
-                      'type': invType,
-                      'issueDate': item?['issueDate'],
-                    });
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: context.primary,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  child: const Text(
-                    'Сохранить',
-                    style: TextStyle(color: Colors.white),
-                  ),
-                ),
-              ],
-            );
-          },
+    try {
+      final result = await showDialog<Map<String, dynamic>>(
+        context: context,
+        builder: (c) => ShiftsInventoryDialog(item: item),
+      );
+      _applyInventoryResult(result, index);
+    } catch (e, _) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ошибка при сохранении имущества: $e')),
         );
-      },
-    );
-
-    if (result != null && result['name'].toString().trim().isNotEmpty) {
-      setState(() {
-        final now = DateTime.now();
-        final dateStr =
-            result['issueDate'] ??
-            "${now.day.toString().padLeft(2, '0')}.${now.month.toString().padLeft(2, '0')}.${now.year}, ${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}";
-
-        final finalItem = <String, dynamic>{
-          'name': result['name'].toString().trim(),
-          'type': result['type'],
-          'details': result['details'].toString().trim(),
-          'purpose': result['purpose'].toString().trim(),
-          'condition': result['condition'],
-          'status': result['status'],
-          'issueDate': dateStr,
-        };
-
-        if (index != null) {
-          (widget.employee['inventory'] as List)[index] = finalItem;
-        } else {
-          (widget.employee['inventory'] as List).insert(0, finalItem);
-        }
-      });
-      widget.onInventoryUpdated();
+      }
     }
+  }
+
+  void _applyInventoryResult(Map<String, dynamic>? result, int? index) {
+    if (result == null || result['name'].toString().trim().isEmpty || !mounted) return;
+    setState(() {
+      final now = DateTime.now();
+      final dateStr =
+          result['issueDate'] ??
+          "${now.day.toString().padLeft(2, '0')}.${now.month.toString().padLeft(2, '0')}.${now.year}, ${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}";
+
+      final finalItem = <String, dynamic>{
+        'name': result['name'].toString().trim(),
+        'type': result['type'],
+        'details': result['details'].toString().trim(),
+        'purpose': result['purpose'].toString().trim(),
+        'condition': result['condition'],
+        'status': result['status'],
+        'issueDate': dateStr,
+      };
+
+      if (index != null) {
+        (widget.employee['inventory'] as List)[index] = finalItem;
+      } else {
+        (widget.employee['inventory'] as List).insert(0, finalItem);
+      }
+    });
+    widget.onInventoryUpdated();
   }
 
   @override

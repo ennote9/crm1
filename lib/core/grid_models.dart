@@ -88,8 +88,6 @@ class GridState {
                   columns: defaultColumns.map((c) => c.clone()).toList(),
                   filters: [],
                   isStandard: true,
-                  sortColumn: null,
-                  isAscending: true,
                 ),
               ],
         ),

@@ -60,7 +60,7 @@ class DashboardView extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 24),
-                  Expanded(flex: 1, child: _buildTasksCard(context)),
+                  Expanded(child: _buildTasksCard(context)),
                 ],
               ),
             ),

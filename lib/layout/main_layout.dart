@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 
 import '../app/settings_store.dart';
+import '../core/status_utils.dart';
 import '../ui/custom_colors.dart';
 import '../features/dashboard/dashboard_view.dart';
 import '../features/settings/settings_view.dart';
 import '../features/shifts/shifts_view.dart';
 import '../features/products/products_view.dart';
+import '../features/sku/sku_view.dart';
 import '../features/zones/zones_view.dart';
 import 'responsive_wrapper.dart';
 
@@ -24,6 +26,7 @@ class _MainLayoutState extends State<MainLayout> {
     const ShiftsView(),
     const ZonesView(),
     const ProductsView(),
+    const SkusView(),
     const Center(child: Text('Аналитика (в разработке)')),
     const SettingsView(),
   ];
@@ -189,13 +192,20 @@ class _MainLayoutState extends State<MainLayout> {
                             ),
                             _buildNavItem(
                               4,
+                              Icons.category_outlined,
+                              Icons.category,
+                              'Номенклатура',
+                              isExpanded,
+                            ),
+                            _buildNavItem(
+                              5,
                               Icons.insights_outlined,
                               Icons.insights,
                               'Аналитика',
                               isExpanded,
                             ),
                             _buildNavItem(
-                              5,
+                              6,
                               Icons.settings_outlined,
                               Icons.settings,
                               'Настройки',
@@ -229,7 +239,7 @@ class _MainLayoutState extends State<MainLayout> {
                           onSelected: (value) {
                             if (value == 'settings') {
                               setState(() {
-                                _selectedIndex = 5;
+                                _selectedIndex = 6;
                               });
                             }
                             if (value == 'logout') {
@@ -352,7 +362,7 @@ class _MainLayoutState extends State<MainLayout> {
                                                   MainAxisAlignment.center,
                                               children: [
                                                 Text(
-                                                  'Iuldashev S.',
+                                                  globalUserName.value,
                                                   style: TextStyle(
                                                     color: context.textMain,
                                                     fontWeight:
